@@ -329,11 +329,22 @@ module.exports = async (req, res) => {
     // provider = "brevo" | "resend" | "mailersend" | "auto"
     // "auto" → try Brevo → Resend → MailerSend in order, falling back on failure
 
-    const htmlMessage = message
-      .replace(/&/g,  "&amp;")
-      .replace(/</g,  "&lt;")
-      .replace(/>/g,  "&gt;")
-      .replace(/\n/g, "<br/>");
+    // `message` now arrives as real HTML from the rich-text editor
+    // (bold/italic/font-size/font-weight spans), so it's used as-is
+    // for the HTML email body — no more escaping/`<br/>` conversion.
+    const htmlMessage = message;
+
+    // Plain-text fallback (for the `text`/`textContent` fields some
+    // providers use), derived by stripping tags from the HTML.
+    const plainTextMessage = message
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .trim();
 
     const results = [];
 
@@ -351,7 +362,7 @@ module.exports = async (req, res) => {
                 email,
                 subject,
                 htmlMessage,
-                message,
+                plainTextMessage,
                 fromName,
                 heroImage,
                 image1,
@@ -377,7 +388,7 @@ module.exports = async (req, res) => {
             email,
             subject,
             htmlMessage,
-            message,
+            plainTextMessage,
             fromName,
             heroImage,
             image1,

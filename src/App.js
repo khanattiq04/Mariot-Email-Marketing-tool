@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import RichTextEditor from "./RichTextEditor";
 import "./App.css";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -238,7 +239,7 @@ export default function App() {
               <div className="provider-info">
                 <span className="provider-name">🟢 MailerSend only</span>
                 <span className="provider-limit">~83 emails/day</span>
-                <span className="provider-desc">Trial (2500/month)</span>
+                
               </div>
             </label>
 
@@ -314,10 +315,11 @@ export default function App() {
 )}
 
   <label>Text Content 1</label>
-  <textarea
-    rows={6}
+  <RichTextEditor
     value={message}
-    onChange={(e) => setMessage(e.target.value)}
+    onChange={setMessage}
+    placeholder="Write your message... select text to style it"
+    rows={6}
   />
 
   <label>Image 1</label>
@@ -411,10 +413,11 @@ export default function App() {
 )}
 
   <label>Text Content 2</label>
-  <textarea
-    rows={6}
+  <RichTextEditor
     value={message2}
-    onChange={(e) => setMessage2(e.target.value)}
+    onChange={setMessage2}
+    placeholder="Write your second message... select text to style it"
+    rows={6}
   />
 </div>
 
