@@ -156,7 +156,7 @@ function buildHtml(
     </a>
 
     <a
-      href="https://instagram.com"
+      href="https://www.instagram.com/model.pros/?hl=en-gb"
       style="
         color:#333;
         text-decoration:none;
@@ -167,7 +167,7 @@ function buildHtml(
     </a>
 
     <a
-      href="https://tiktok.com"
+      href="https://www.tiktok.com/@modelpros"
       style="
         color:#333;
         text-decoration:none;
