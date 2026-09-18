@@ -28,20 +28,91 @@ function buildHtml(
   message2
 ) {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="x-apple-disable-message-reformatting"/>
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"/>
+  <!--[if mso]>
+  <xml>
+    <o:OfficeDocumentSettings>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+  <![endif]-->
+  <style type="text/css">
+    /* Client resets */
+    html, body { margin:0 !important; padding:0 !important; width:100% !important; }
+    * { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+    table { border-collapse:collapse !important; border-spacing:0 !important; mso-table-lspace:0pt !important; mso-table-rspace:0pt !important; }
+    img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
+    a { text-decoration:none; }
+
+    /* Fluid container + fluid images, so the email fits any screen width */
+    .email-container { width:100% !important; max-width:650px !important; }
+    .fluid-img { display:block !important; width:100% !important; max-width:100% !important; height:auto !important; }
+    .content-text, .content-text * { word-wrap:break-word !important; overflow-wrap:break-word !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
+    .content-text img { width:auto !important; max-width:100% !important; height:auto !important; }
+    .btn { display:inline-block; }
+
+    /* Mobile phones */
+    @media only screen and (max-width:660px) {
+      .email-container { width:100% !important; max-width:100% !important; }
+      .px-card    { padding:18px 10px 0 !important; }
+      .px-header  { padding:24px 20px !important; }
+      .px-content { padding:26px 20px !important; }
+      .px-images  { padding:0 20px 8px !important; }
+      .px-actions { padding:16px 20px 6px !important; }
+      .px-social  { padding:18px 16px !important; }
+      .h1-title   { font-size:22px !important; line-height:28px !important; }
+      .body-text  { font-size:14px !important; line-height:26px !important; }
+
+      /* Nothing in the message content may overflow the screen */
+      .px-content, .px-content * { max-width:100% !important; }
+
+      /* Stack the three image columns on top of each other */
+      .stack-row  { display:block !important; width:100% !important; }
+      .stack-col  { display:block !important; width:100% !important; padding:0 0 14px 0 !important; }
+      .stack-col-last { padding:0 !important; }
+      .spacer     { display:none !important; width:0 !important; max-width:0 !important; font-size:0 !important; line-height:0 !important; }
+
+      /* Full width, easy to tap buttons */
+      .btn { display:block !important; width:100% !important; box-sizing:border-box !important; margin:0 0 12px 0 !important; text-align:center !important; }
+
+      .social-link { margin:0 8px !important; }
+    }
+
+    /* Small phones */
+    @media only screen and (max-width:400px) {
+      .px-card    { padding:12px 6px 0 !important; }
+      .px-header  { padding:20px 16px !important; }
+      .px-content { padding:22px 16px !important; }
+      .px-images  { padding:0 16px 6px !important; }
+      .px-actions { padding:14px 16px 4px !important; }
+      .h1-title   { font-size:20px !important; line-height:26px !important; }
+      .body-text  { font-size:14px !important; line-height:24px !important; }
+      .btn        { padding:14px 18px !important; font-size:14px !important; }
+      .social-link { margin:0 6px !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-<tr><td align="center">
-<table width="650" cellpadding="0" cellspacing="0" role="presentation"
-  style="background:#ffffff;margin-top:30px;border-radius:12px;overflow:hidden;max-width:650px;">
+<body style="margin:0;padding:0;width:100%;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f5f5f5;">
+<tr>
+<td class="px-card" align="center" style="padding:30px 10px 0;">
+
+  <!--[if mso]>
+  <table role="presentation" align="center" width="650" cellpadding="0" cellspacing="0" border="0"><tr><td>
+  <![endif]-->
+
+  <table role="presentation" class="email-container" align="center" width="100%" cellpadding="0" cellspacing="0" border="0"
+    style="width:100%;max-width:650px;background:#ffffff;border-radius:12px;overflow:hidden;">
 
   <tr>
-    <td style="background:#111111;padding:30px 40px;">
-      <h1 style="margin:0;font-size:28px;color:#ffffff;letter-spacing:1px;">
+    <td class="px-header" style="background:#111111;padding:30px 40px;">
+      <h1 class="h1-title" style="margin:0;font-size:28px;color:#ffffff;letter-spacing:1px;">
         ${fromName || "Model Pros"}
       </h1>
     </td>
@@ -50,44 +121,45 @@ function buildHtml(
   <tr>
   <td>
     <img
+      class="fluid-img"
       src="${heroImage}"
       width="100%"
-      style="display:block;width:100%;"
+      style="display:block;width:100%;max-width:100%;height:auto;"
     />
   </td>
 </tr>
 
 <tr>
-  <td style="padding:40px;">
-    <p style="font-size:14px;line-height:28px;color:#444;">
+  <td class="px-content content-text" style="padding:40px;">
+    <p class="body-text" style="font-size:14px;line-height:28px;color:#444;">
       ${htmlMessage}
     </p>
   </td>
 </tr>
 
 <tr>
-  <td style="padding:0 20px 20px;">
+  <td class="px-images" style="padding:0 20px 20px;">
 
-    <table width="100%">
-      <tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+      <tr class="stack-row">
 
-        <td width="33%">
-          <img src="${image1}" width="100%"
-            style="border-radius:12px;" />
+        <td class="stack-col" width="33%" style="width:33%;">
+          <img class="fluid-img" src="${image1}" width="100%"
+            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
         </td>
 
-        <td width="2%"></td>
+        <td class="spacer" width="2%" style="width:2%;font-size:0;line-height:0;"></td>
 
-        <td width="33%">
-          <img src="${image2}" width="100%"
-            style="border-radius:12px;" />
+        <td class="stack-col" width="33%" style="width:33%;">
+          <img class="fluid-img" src="${image2}" width="100%"
+            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
         </td>
 
-        <td width="2%"></td>
+        <td class="spacer" width="2%" style="width:2%;font-size:0;line-height:0;"></td>
 
-        <td width="33%">
-          <img src="${image3}" width="100%"
-            style="border-radius:12px;" />
+        <td class="stack-col stack-col-last" width="33%" style="width:33%;">
+          <img class="fluid-img" src="${image3}" width="100%"
+            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
         </td>
 
       </tr>
@@ -97,17 +169,18 @@ function buildHtml(
 </tr>
 
 <tr>
-  <td style="padding:40px;">
-    <p style="font-size:14px;line-height:28px;color:#444;">
+  <td class="px-content content-text" style="padding:40px;">
+    <p class="body-text" style="font-size:14px;line-height:28px;color:#444;">
       ${message2}
     </p>
   </td>
 </tr>
 
 <tr>
-  <td align="center" style="padding:20px 20px 10px;">
+  <td class="px-actions" align="center" style="padding:20px 20px 10px;">
 
     <a
+      class="btn"
       href="https://model-pros.com/"
       style="
         display:inline-block;
@@ -124,6 +197,7 @@ function buildHtml(
     </a>
 
     <a
+      class="btn"
       href="https://model-pros.com/"
       style="
         display:inline-block;
@@ -142,9 +216,10 @@ function buildHtml(
 </tr>
 
 <tr>
-  <td align="center" style="padding:25px;">
+  <td class="px-social" align="center" style="padding:25px;">
 
     <a
+      class="social-link"
       href="https://facebook.com"
       style="
         color:#333;
@@ -156,6 +231,7 @@ function buildHtml(
     </a>
 
     <a
+      class="social-link"
       href="https://www.instagram.com/model.pros/?hl=en-gb"
       style="
         color:#333;
@@ -167,6 +243,7 @@ function buildHtml(
     </a>
 
     <a
+      class="social-link"
       href="https://www.tiktok.com/@modelpros"
       style="
         color:#333;
@@ -181,7 +258,13 @@ function buildHtml(
 </tr>
 
 </table>
-</td></tr>
+
+  <!--[if mso]>
+  </td></tr></table>
+  <![endif]-->
+
+</td>
+</tr>
 </table>
 </body>
 </html>`;
