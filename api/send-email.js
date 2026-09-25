@@ -2,6 +2,7 @@ const SibApiV3Sdk = require("sib-api-v3-sdk");
 const { Resend }  = require("resend");
 const MailerSend  = require("mailersend").MailerSend;
 const { EmailParams, Sender, Recipient } = require("mailersend");
+const crypto = require("crypto");
 
 // ── Brevo setup ───────────────────────────────────────────────
 const client    = SibApiV3Sdk.ApiClient.instance;
@@ -16,6 +17,31 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const mailerSend = new MailerSend({
   apiKey: process.env.MAILERSEND_API_KEY,
 });
+
+// ---- EmailOctopus setup ----
+// EmailOctopus exposes no transactional send endpoint, so it is wired up as an
+// audience/automation provider rather than a direct sender.
+const eoApiKey       = process.env.EMAILOCTOPUS_API_KEY;
+const eoListId       = process.env.EMAILOCTOPUS_LIST_ID;
+const eoAutomationId = process.env.EMAILOCTOPUS_AUTOMATION_ID;
+const EO_BASE_URL    = process.env.EMAILOCTOPUS_BASE_URL || "https://api.emailoctopus.com";
+
+// ---- Sender identity ----
+// Defaults match the current live setup; override via env to change them
+// without touching code.
+const fromEmail        = process.env.MAIL_FROM_EMAIL || "marketing@mariotstore.com";
+const defaultFromName  = process.env.MAIL_FROM_NAME || "Mariot Store";
+const unsubscribeEmail = process.env.MAIL_UNSUBSCRIBE_EMAIL || "marketing@mariotstore.com";
+
+const unsubscribeHeaders = {
+  "List-Unsubscribe":      `<mailto:${unsubscribeEmail}>`,
+  "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+};
+
+const unsubscribeHeaderList = [
+  { name: "List-Unsubscribe",      value: `<mailto:${unsubscribeEmail}>` },
+  { name: "List-Unsubscribe-Post", value: "List-Unsubscribe=One-Click" },
+];
 
 // ── Shared HTML email builder ─────────────────────────────────
 function buildHtml(
@@ -113,7 +139,7 @@ function buildHtml(
   <tr>
     <td class="px-header" style="background:#111111;padding:30px 40px;">
       <h1 class="h1-title" style="margin:0;font-size:28px;color:#ffffff;letter-spacing:1px;">
-        ${fromName || "Model Pros"}
+        ${fromName || defaultFromName}
       </h1>
     </td>
   </tr>
@@ -181,7 +207,7 @@ function buildHtml(
 
     <a
       class="btn"
-      href="https://model-pros.com/"
+      href="https://mariotstore.com/"
       style="
         display:inline-block;
         background:#000;
@@ -198,7 +224,7 @@ function buildHtml(
 
     <a
       class="btn"
-      href="https://model-pros.com/"
+      href="https://mariotstore.com/en/about"
       style="
         display:inline-block;
         background:#eaeaea;
@@ -220,7 +246,7 @@ function buildHtml(
 
     <a
       class="social-link"
-      href="https://facebook.com"
+      href="https://www.facebook.com/mariotuae"
       style="
         color:#333;
         text-decoration:none;
@@ -232,7 +258,7 @@ function buildHtml(
 
     <a
       class="social-link"
-      href="https://www.instagram.com/model.pros/?hl=en-gb"
+      href="https://www.instagram.com/mariotuae/"
       style="
         color:#333;
         text-decoration:none;
@@ -240,18 +266,6 @@ function buildHtml(
       "
     >
       Instagram
-    </a>
-
-    <a
-      class="social-link"
-      href="https://www.tiktok.com/@modelpros"
-      style="
-        color:#333;
-        text-decoration:none;
-        margin:0 10px;
-      "
-    >
-      TikTok
     </a>
 
   </td>
@@ -271,6 +285,54 @@ function buildHtml(
 }
 
 // ── Send via Brevo ────────────────────────────────────────────
+// Brevo accepts a send request even when the sender is not validated, then
+// rejects it asynchronously. The API therefore returns success while nothing is
+// ever delivered, which makes the tool report "sent" for mail that was dropped.
+// Verify the sender up front and fail loudly instead.
+let brevoSenderCache = { at: 0, value: null };
+const BREVO_SENDER_CACHE_MS = 5 * 60 * 1000;
+
+async function brevoSenderStatus() {
+  const fresh = brevoSenderCache.value && Date.now() - brevoSenderCache.at < BREVO_SENDER_CACHE_MS;
+  if (fresh) return brevoSenderCache.value;
+
+  const headers = { "api-key": process.env.BREVO_API_KEY, accept: "application/json" };
+  const [sendersRes, domainsRes] = await Promise.all([
+    fetch("https://api.brevo.com/v3/senders", { headers }),
+    fetch("https://api.brevo.com/v3/senders/domains", { headers }),
+  ]);
+
+  // If Brevo cannot be reached, do not block sending - let Brevo decide.
+  if (!sendersRes.ok && !domainsRes.ok) return null;
+
+  const senders = sendersRes.ok ? (await sendersRes.json()).senders || [] : [];
+  const domains = domainsRes.ok ? (await domainsRes.json()).domains || [] : [];
+  const value = {
+    senders: senders.map((s) => String(s.email || "").toLowerCase()),
+    domains: domains
+      .filter((d) => d.authenticated && d.domain_name)
+      .map((d) => String(d.domain_name).toLowerCase()),
+  };
+
+  brevoSenderCache = { at: Date.now(), value };
+  return value;
+}
+
+async function assertBrevoSenderValid() {
+  const status = await brevoSenderStatus();
+  if (!status) return;
+
+  const address = String(fromEmail || "").toLowerCase();
+  const domain  = address.split("@")[1] || "";
+  if (status.senders.includes(address) || status.domains.includes(domain)) return;
+
+  throw new Error(
+    `${fromEmail} is not a validated Brevo sender and "${domain}" is not an authenticated Brevo domain, ` +
+    `so Brevo drops every message it accepts. Add the sender or authenticate the domain under ` +
+    `Senders & IP in Brevo, or select a different provider.`
+  );
+}
+
 async function sendViaBrevo(
   email,
   subject,
@@ -283,15 +345,14 @@ async function sendViaBrevo(
   image3,
   message2
 ) {
+  await assertBrevoSenderValid();
+
   await tranEmailApi.sendTransacEmail({
-    sender:      { email: "hello@model-pros.com", name: fromName || "Model Pros" },
+    sender:      { email: fromEmail, name: fromName || defaultFromName },
     to:          [{ email }],
     subject,
     textContent: message,
-    headers: {
-      "List-Unsubscribe":      "<mailto:unsubscribe@model-pros.com>",
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    },
+    headers: unsubscribeHeaders,
     htmlContent: buildHtml(
   fromName,
   htmlMessage,
@@ -318,7 +379,7 @@ async function sendViaResend(
   message2
 ) {
   const { error } = await resend.emails.send({
-    from:        `${fromName || "Model Pros"} <hello@model-pros.com>`,
+    from:        `${fromName || defaultFromName} <${fromEmail}>`,
     to:          [email],
     subject,
     text:        message,
@@ -331,10 +392,7 @@ async function sendViaResend(
   image3,
   message2
 ),
-    headers: {
-      "List-Unsubscribe":      "<mailto:unsubscribe@model-pros.com>",
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    },
+    headers: unsubscribeHeaders,
   });
   if (error) throw new Error(error.message);
 }
@@ -352,7 +410,7 @@ async function sendViaMailerSend(
   image3,
   message2
 ) {
-  const sentFrom = new Sender("hello@model-pros.com", fromName || "Model Pros");
+  const sentFrom = new Sender(fromEmail, fromName || defaultFromName);
   const recipients = [new Recipient(email)];
 
   const emailParams = new EmailParams()
@@ -369,10 +427,7 @@ async function sendViaMailerSend(
   message2
 ))
     .setText(message)
-    .setHeaders([
-      { name: "List-Unsubscribe", value: "<mailto:unsubscribe@model-pros.com>" },
-      { name: "List-Unsubscribe-Post", value: "List-Unsubscribe=One-Click" },
-    ]);
+    .setHeaders(unsubscribeHeaderList);
 
   await mailerSend.email.send(emailParams);
 }
@@ -380,10 +435,84 @@ async function sendViaMailerSend(
 // ── Provider order for AUTO mode ────────────────────────────
 // Brevo (300/day) → Resend (100/day) → MailerSend (~83/day on 2500/month trial)
 const PROVIDERS = [
-  { name: "brevo",      fn: sendViaBrevo },
-  { name: "resend",     fn: sendViaResend },
-  { name: "mailersend", fn: sendViaMailerSend },
+  { name: "brevo",        fn: sendViaBrevo },
+  { name: "resend",       fn: sendViaResend },
+  { name: "mailersend",   fn: sendViaMailerSend },
+  { name: "emailoctopus", fn: sendViaEmailOctopus },
 ];
+
+// `auto` only falls back through the providers that deliver the HTML composed
+// in this tool. EmailOctopus triggers a pre-built automation instead, so it is
+// opt-in only and is never used by `auto`.
+const AUTO_PROVIDER_ORDER = ["brevo", "resend", "mailersend"];
+
+// ---- EmailOctopus ----
+// EmailOctopus has no transactional send endpoint, so this provider behaves
+// differently from the other three: it adds the recipient to a list and, when
+// an automation id is configured, queues them into that automation. The email
+// that actually goes out is the one built in the EmailOctopus dashboard - the
+// HTML composed in this tool is not delivered by this provider.
+function md5Hex(value) {
+  return crypto.createHash("md5").update(value).digest("hex");
+}
+
+// Provider SDKs throw a mix of Errors, plain objects and strings, so normalise
+// whatever was caught into a message the UI can actually display.
+function errorDetail(err) {
+  if (!err) return "Unknown error";
+  if (typeof err === "string") return err;
+  if (err.message) return err.message;
+  if (err.body && err.body.message) return err.body.message;
+  try {
+    const json = JSON.stringify(err);
+    if (json && json !== "{}") return json;
+  } catch (e) {
+    // not serialisable - fall through to String()
+  }
+  return String(err);
+}
+
+async function emailOctopusRequest(path, body, { ignoreConflict = false } = {}) {
+  const response = await fetch(`${EO_BASE_URL}${path}`, {
+    method:  "POST",
+    headers: {
+      Authorization:  `Bearer ${eoApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const raw  = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+
+  if (!response.ok) {
+    // Re-adding an existing contact is a no-op, not a failure.
+    if (ignoreConflict && response.status === 409) return data;
+    const detail = data.detail || data.title || data.message || `HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+
+  return data;
+}
+
+async function sendViaEmailOctopus(email) {
+  if (!eoApiKey) throw new Error("EMAILOCTOPUS_API_KEY is not set");
+  if (!eoListId) throw new Error("EMAILOCTOPUS_LIST_ID is not set");
+
+  await emailOctopusRequest(
+    `/lists/${eoListId}/contacts`,
+    { email_address: email, status: "subscribed" },
+    { ignoreConflict: true }
+  );
+
+  if (eoAutomationId) {
+    // The queue endpoint accepts the contact id or an MD5 hash of the
+    // lowercased email address, so no lookup round-trip is needed.
+    await emailOctopusRequest(`/automations/${eoAutomationId}/queue`, {
+      contact_id: md5Hex(email.trim().toLowerCase()),
+    });
+  }
+}
 
 // ── Main handler ──────────────────────────────────────────────
 module.exports = async (req, res) => {
@@ -409,7 +538,7 @@ module.exports = async (req, res) => {
   fromName,
   provider
 } = req.body;
-    // provider = "brevo" | "resend" | "mailersend" | "auto"
+    // provider = "brevo" | "resend" | "mailersend" | "emailoctopus" | "auto"
     // "auto" → try Brevo → Resend → MailerSend in order, falling back on failure
 
     // `message` now arrives as real HTML from the rich-text editor
@@ -435,11 +564,13 @@ module.exports = async (req, res) => {
       let usedProvider = provider;
       let sent         = false;
       let lastError    = null;
+      const failures   = [];
 
       try {
         if (provider === "auto") {
-          // Try each provider in order until one succeeds
-          for (const p of PROVIDERS) {
+          // Try each transactional provider in order until one succeeds
+          for (const name of AUTO_PROVIDER_ORDER) {
+            const p = PROVIDERS.find((x) => x.name === name);
             try {
               await p.fn(
                 email,
@@ -458,10 +589,17 @@ module.exports = async (req, res) => {
               break;
             } catch (err) {
               lastError = err;
-              console.log(`${p.name} failed for ${email}: ${err.message} — trying next...`);
+              failures.push(`${name}: ${errorDetail(err)}`);
+              console.log(`${name} failed for ${email}: ${errorDetail(err)} — trying next...`);
             }
           }
-          if (!sent) throw lastError || new Error("All providers failed");
+          // Report every provider's reason - the last one alone is misleading,
+          // since the primary provider's failure is usually the real problem.
+          if (!sent) {
+            throw new Error(
+              failures.length ? `All providers failed — ${failures.join(" | ")}` : "All providers failed"
+            );
+          }
 
         } else {
           // Specific provider chosen
@@ -487,8 +625,8 @@ module.exports = async (req, res) => {
         results.push({ email, status: "sent", provider: usedProvider });
 
       } catch (err) {
-        console.log(`Failed [${usedProvider}]: ${email} — ${err.message}`);
-        results.push({ email, status: "failed", error: err.message, provider: usedProvider });
+        console.log(`Failed [${usedProvider}]: ${email} — ${errorDetail(err)}`);
+        results.push({ email, status: "failed", error: errorDetail(err), provider: usedProvider });
       }
     }
 

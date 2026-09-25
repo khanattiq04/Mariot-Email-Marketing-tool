@@ -1,15 +1,28 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import RichTextEditor from "./RichTextEditor";
+import Login from "./Login";
+import { fetchSession, logout } from "./auth";
 import "./App.css";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Cloudinary (unsigned browser upload).
+// Set REACT_APP_CLOUDINARY_CLOUD_NAME / REACT_APP_CLOUDINARY_UPLOAD_PRESET in .env
+// (and in the Vercel project dashboard) to point at a different Cloudinary account.
+const CLOUDINARY_CLOUD_NAME =
+  process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || "sgzvnrzn";
+const CLOUDINARY_UPLOAD_PRESET =
+  process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET || "email-marketing";
+const CLOUDINARY_UPLOAD_URL =
+  `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 // Provider daily limits (free tier)
 const PROVIDER_LIMITS = {
   brevo:      300,
   resend:     100,
   mailersend: 83,    // ~2500/month trial ÷ 30 days
+  emailoctopus: 2500, // free-plan list cap; EmailOctopus delivers via automations
   auto:       483,
 };
 
@@ -17,6 +30,7 @@ const PROVIDER_ICONS = {
   brevo:      "🔵",
   resend:     "🟠",
   mailersend: "🟢",
+  emailoctopus: "🟣",
 };
 
 export default function App() {
@@ -28,9 +42,36 @@ export default function App() {
   const [isSending,     setIsSending]     = useState(false);
   const [logs,          setLogs]          = useState([]);
   const [progress,      setProgress]      = useState({ done: 0, total: 0 });
-  const [provider,      setProvider]      = useState("auto"); // "brevo" | "resend" | "mailersend" | "auto"
-  const [providerStats, setProviderStats] = useState({ brevo: 0, resend: 0, mailersend: 0 });
+  const [provider,      setProvider]      = useState("auto"); // "brevo" | "resend" | "mailersend" | "emailoctopus" | "auto"
+  const [providerStats, setProviderStats] = useState({ brevo: 0, resend: 0, mailersend: 0, emailoctopus: 0 });
+
+  // "checking" until the session cookie has been verified server-side.
+  const [session, setSession] = useState("checking"); // "checking" | "authed" | "anon"
+  const [sessionEmail, setSessionEmail] = useState("");
   const stopRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    fetchSession().then((result) => {
+      if (!active) return;
+      setSession(result.authed ? "authed" : "anon");
+      setSessionEmail(result.email || "");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSignedIn = (email) => {
+    setSessionEmail(email || "");
+    setSession("authed");
+  };
+
+  const handleSignOut = async () => {
+    await logout();
+    setSessionEmail("");
+    setSession("anon");
+  };
   
   const [heroImage, setHeroImage] = useState("");
   const [image1, setImage1] = useState("");
@@ -48,18 +89,12 @@ export default function App() {
 
     formData.append("file", file);
 
-    formData.append(
-      "upload_preset",
-      "email-marketing"
-    );
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
-    const response = await fetch(
-      "https://api.cloudinary.com/v1_1/dfbrl3o1f/image/upload",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+      method: "POST",
+      body: formData,
+    });
 
     const data = await response.json();
 
@@ -103,7 +138,7 @@ export default function App() {
     setIsSending(true);
     setLogs([]);
     setProgress({ done: 0, total: list.length });
-    setProviderStats({ brevo: 0, resend: 0, mailersend: 0 });
+    setProviderStats({ brevo: 0, resend: 0, mailersend: 0, emailoctopus: 0 });
     toast.success(`Starting campaign for ${list.length} email(s) via ${provider.toUpperCase()}...`);
 
     for (let i = 0; i < list.length; i++) {
@@ -168,16 +203,30 @@ export default function App() {
     toast("Stopping after current email...", { icon: "⛔" });
   };
 
+  if (session === "checking") {
+    return <div className="login-screen" />;
+  }
+
+  if (session === "anon") {
+    return <Login onSuccess={handleSignedIn} />;
+  }
+
   const emailCount = parseEmails().length;
   const pct        = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
-  const totalSent  = providerStats.brevo + providerStats.resend + providerStats.mailersend;
+  const totalSent  = providerStats.brevo + providerStats.resend + providerStats.mailersend + providerStats.emailoctopus;
 
   return (
     <div className="app">
       <Toaster position="top-right" />
       <header className="header">
-        <div className="logo">✉️ Model Pros</div>
+        <div className="logo">✉️ Mariot Store</div>
         <div className="tagline">Email Marketing Tool</div>
+        <div className="header-actions">
+          {sessionEmail ? <span className="header-user">{sessionEmail}</span> : null}
+          <button type="button" className="btn-logout" onClick={handleSignOut}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="main">
@@ -188,7 +237,7 @@ export default function App() {
           <label>Your Name</label>
           <input
             type="text"
-            placeholder="e.g. Ali from Model Pros"
+            placeholder="e.g. Alex from Mariot Store"
             value={fromName}
             onChange={(e) => setFromName(e.target.value)}
           />
@@ -243,6 +292,17 @@ export default function App() {
               </div>
             </label>
 
+            <label className={`provider-card ${provider === "emailoctopus" ? "active" : ""}`}>
+              <input type="radio" name="provider" value="emailoctopus"
+                checked={provider === "emailoctopus"}
+                onChange={() => setProvider("emailoctopus")} />
+              <div className="provider-info">
+                <span className="provider-name">🟣 EmailOctopus</span>
+                <span className="provider-limit">list + automation</span>
+                <span className="provider-desc">Sends your EmailOctopus automation</span>
+              </div>
+            </label>
+
           </div>
 
           {emailCount > 0 && (
@@ -277,7 +337,7 @@ export default function App() {
   <label>Subject Line</label>
   <input
     type="text"
-    placeholder="e.g. Model Pros Casting Opportunity"
+    placeholder="e.g. Mariot Store Kitchen Equipment"
     value={subject}
     onChange={(e) => setSubject(e.target.value)}
   />
@@ -450,9 +510,10 @@ export default function App() {
             </div>
             {/* Live provider usage */}
             <div className="provider-usage">
-              {providerStats.brevo      > 0 && <span>🔵 Brevo: {providerStats.brevo}</span>}
-              {providerStats.resend     > 0 && <span>🟠 Resend: {providerStats.resend}</span>}
-              {providerStats.mailersend > 0 && <span>🟢 MailerSend: {providerStats.mailersend}</span>}
+              {providerStats.brevo        > 0 && <span>🔵 Brevo: {providerStats.brevo}</span>}
+              {providerStats.resend       > 0 && <span>🟠 Resend: {providerStats.resend}</span>}
+              {providerStats.mailersend   > 0 && <span>🟢 MailerSend: {providerStats.mailersend}</span>}
+              {providerStats.emailoctopus > 0 && <span>🟣 EmailOctopus: {providerStats.emailoctopus}</span>}
             </div>
           </div>
         )}
@@ -485,6 +546,10 @@ export default function App() {
             <div className="summary-row">
               <span>🟢 Sent via MailerSend</span>
               <strong>{providerStats.mailersend}</strong>
+            </div>
+            <div className="summary-row">
+              <span>🟣 Queued via EmailOctopus</span>
+              <strong>{providerStats.emailoctopus}</strong>
             </div>
             <div className="summary-row total">
               <span>Total Sent</span>

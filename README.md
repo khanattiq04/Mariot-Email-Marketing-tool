@@ -1,3 +1,103 @@
+# email-marketing-tool
+
+React app for sending email campaigns through Brevo, Resend, MailerSend, or
+EmailOctopus.
+
+## Running locally
+
+```bash
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000.
+
+`npm run dev` starts two things:
+
+- the React app on http://localhost:3000
+- a local runner for the serverless function in `api/`, on port 3001
+
+The Create React App dev server does not serve `/api/*`, so `src/setupProxy.js`
+forwards those requests to the runner. Without it, sending a campaign would
+404 locally. On Vercel the `api/` directory is deployed as real serverless
+functions and this runner is not used.
+
+## Providers
+
+| Provider | Env vars | Notes |
+| --- | --- | --- |
+| Brevo | `BREVO_API_KEY` | Sends the composed email. |
+| Resend | `RESEND_API_KEY` | Sends the composed email. The sending domain must be verified in the account that owns this key. |
+| MailerSend | `MAILERSEND_API_KEY` | Sends the composed email. |
+| EmailOctopus | `EMAILOCTOPUS_API_KEY`, `EMAILOCTOPUS_LIST_ID`, `EMAILOCTOPUS_AUTOMATION_ID` | See the caveat below. |
+
+`auto` tries Brevo, then Resend, then MailerSend, falling back on failure. It
+never uses EmailOctopus, because that provider does not deliver the composed
+email.
+
+### EmailOctopus caveat
+
+EmailOctopus has no transactional send endpoint, so it cannot send the HTML you
+compose in this tool. Selecting it adds each recipient to `EMAILOCTOPUS_LIST_ID`
+as a subscribed contact and, when `EMAILOCTOPUS_AUTOMATION_ID` is set, queues
+them into that automation, which delivers the email you built in the
+EmailOctopus dashboard. With no automation id set, recipients are only added to
+the list and nothing is sent.
+
+### Sender identity
+
+`MAIL_FROM_EMAIL`, `MAIL_FROM_NAME` and `MAIL_UNSUBSCRIBE_EMAIL` control the
+sender address, the display name and the `List-Unsubscribe` header. They default
+to `admin@mariotkitchen.com` / `Mariot Store`.
+
+All values are read server-side only, so they are never exposed to the browser.
+
+On Vercel, set these variables in the project dashboard and redeploy. `.env` is
+gitignored and is only read by the local dev runner.
+
+### Images (Cloudinary)
+
+Image uploads run in the browser using Cloudinary's unsigned upload flow, so
+these two values are public and are inlined into the client bundle at build time:
+
+| Variable | Purpose |
+| --- | --- |
+| `REACT_APP_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name, e.g. `dfbrl3o1f` |
+| `REACT_APP_CLOUDINARY_UPLOAD_PRESET` | Unsigned upload preset, e.g. `email-marketing` |
+
+The upload preset must exist in the Cloudinary dashboard with **Signing Mode**
+set to *Unsigned*. Because the values are baked in at build time, changing them
+requires a rebuild and redeploy (restart `npm run dev` locally). Fallback
+defaults live in `src/App.js`.
+
+### Login
+
+The app is gated behind a sign-in form. Credentials are checked by
+`api/login.js` against environment variables, so the password is never inlined
+into the browser bundle:
+
+| Variable | Purpose |
+| --- | --- |
+| `LOGIN_EMAIL` | The only account allowed to sign in |
+| `LOGIN_PASSWORD` | Its password |
+| `SESSION_SECRET` | Signs the session cookie; rotate to invalidate all sessions |
+
+A successful sign-in sets an `HttpOnly` `mm_session` cookie, valid for 12 hours.
+`GET /api/login` reports the current session, and `DELETE /api/login` signs out.
+
+Set all three on Vercel too, or `/api/login` returns 500 and nobody can sign in.
+
+**This gate only hides the interface.** `api/send-email.js` is still callable by
+anyone who knows the URL, so it can be used to send mail without signing in.
+Protect it the same way before treating the tool as private.
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | React app + local API runner |
+| `npm run dev:api` | Local API runner only |
+| `npm start` | React app only (`/api/*` calls will fail) |
+| `npm run build` | Production build into `build/` |
+| `npm test` | Test runner in watch mode |
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
