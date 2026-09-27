@@ -17,6 +17,63 @@ const CLOUDINARY_UPLOAD_PRESET =
 const CLOUDINARY_UPLOAD_URL =
   `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
+// Email clients do not render AVIF or HEIC, and Cloudinary hands those files
+// back untouched, so they arrive in the inbox looking broken. Convert them to
+// JPEG in the browser before upload; every other format is uploaded unchanged.
+const EMAIL_UNSUPPORTED_TYPES = ["image/avif", "image/heic", "image/heif"];
+const EMAIL_UNSUPPORTED_EXTENSION = /\.(avif|heic|heif)$/i;
+
+function isEmailUnsupported(file) {
+  const type = (file.type || "").toLowerCase();
+  if (type) return EMAIL_UNSUPPORTED_TYPES.includes(type);
+  return EMAIL_UNSUPPORTED_EXTENSION.test(file.name || "");
+}
+
+function convertToJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      // JPEG has no transparency, so paint white first to avoid black edges.
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Could not convert this image to JPEG."));
+            return;
+          }
+          const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+          resolve(new File([blob], name, { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.92
+      );
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read this image. Please use a JPG or PNG."));
+    };
+
+    image.src = url;
+  });
+}
+
+function prepareForUpload(file) {
+  return isEmailUnsupported(file) ? convertToJpeg(file) : Promise.resolve(file);
+}
+
 // Provider daily limits (free tier)
 const PROVIDER_LIMITS = {
   brevo:      300,
@@ -33,10 +90,12 @@ const PROVIDER_ICONS = {
   emailoctopus: "🟣",
 };
 
+// The sender name is fixed for the whole tool, so the field below is read-only.
+const SENDER_NAME = "Mariot Store";
+
 export default function App() {
   const [emails,        setEmails]        = useState("");
   const [subject,       setSubject]       = useState("");
-  const [fromName,      setFromName]      = useState("");
   const [message,       setMessage]       = useState("");
   const [delaySeconds,  setDelaySeconds]  = useState(5);
   const [isSending,     setIsSending]     = useState(false);
@@ -87,7 +146,9 @@ export default function App() {
 
     const formData = new FormData();
 
-    formData.append("file", file);
+    const prepared = await prepareForUpload(file);
+    if (prepared !== file) toast("Converted to JPEG so it displays in email.");
+    formData.append("file", prepared);
 
     formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
@@ -127,7 +188,7 @@ export default function App() {
   const handleSend = async () => {
     const list = parseEmails();
     if (!list.length)               return toast.error("Add at least one valid email.");
-    if (!subject || !message || !fromName) return toast.error("Fill in all fields.");
+    if (!subject || !message) return toast.error("Fill in all fields.");
 
     const limit = PROVIDER_LIMITS[provider];
     if (list.length > limit) {
@@ -162,7 +223,7 @@ export default function App() {
           image1,
           image2,
           image3,
-          fromName,
+          fromName: SENDER_NAME,
           provider
         }),
         });
@@ -234,13 +295,13 @@ export default function App() {
         {/* ── Sender Info ── */}
         <div className="card">
           <h2>📋 Sender Info</h2>
-          <label>Your Name</label>
+          <label>Sender Name</label>
           <input
             type="text"
-            placeholder="e.g. Alex from Mariot Store"
-            value={fromName}
-            onChange={(e) => setFromName(e.target.value)}
+            value={SENDER_NAME}
+            readOnly
           />
+          <p className="field-hint">Sender name is fixed to Mariot Store.</p>
         </div>
 
         {/* ── Provider Selection ── */}

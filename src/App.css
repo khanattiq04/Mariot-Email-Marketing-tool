@@ -68,6 +68,12 @@ input[type="range"] { width: 100%; accent-color: #3182ce; }
   border-radius: 6px;
 }
 
+.field-hint {
+  font-size: 0.8rem;
+  color: #718096;
+  margin: 0.5rem 0 0;
+}
+
 .actions { display: flex; justify-content: center; }
 
 .btn-send, .btn-stop {

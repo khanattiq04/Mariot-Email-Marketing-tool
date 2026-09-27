@@ -72,24 +72,32 @@ defaults live in `src/App.js`.
 
 ### Login
 
-The app is gated behind a sign-in form. Credentials are checked by
-`api/login.js` against environment variables, so the password is never inlined
-into the browser bundle:
+The app is gated behind a sign-in form that `src/auth.js` checks in the browser,
+so it needs no server function and works on static hosting:
 
 | Variable | Purpose |
 | --- | --- |
-| `LOGIN_EMAIL` | The only account allowed to sign in |
-| `LOGIN_PASSWORD` | Its password |
-| `SESSION_SECRET` | Signs the session cookie; rotate to invalidate all sessions |
+| `REACT_APP_LOGIN_EMAIL` | The only account allowed to sign in |
+| `REACT_APP_LOGIN_PASSWORD` | Its password |
 
-A successful sign-in sets an `HttpOnly` `mm_session` cookie, valid for 12 hours.
-`GET /api/login` reports the current session, and `DELETE /api/login` signs out.
+Both are `REACT_APP_*` values, so they are inlined into the bundle at build
+time. Set them before `npm run build`, and rebuild and re-upload after any
+change - environment variables set in a hosting panel are never read by a static
+site. A successful sign-in stores a 12 hour session in `localStorage`.
 
-Set all three on Vercel too, or `/api/login` returns 500 and nobody can sign in.
+**This gate only hides the interface.** The password ships inside
+`build/static/js/*.js`, so anyone can read it straight out of the bundle, and
+`api/send-email.js` is still callable by anyone who knows the URL. For a real
+lock on static hosting, use the host's directory password protection (an Apache
+`.htpasswd`, e.g. Hostinger's "Password Protect Directories").
 
-**This gate only hides the interface.** `api/send-email.js` is still callable by
-anyone who knows the URL, so it can be used to send mail without signing in.
-Protect it the same way before treating the tool as private.
+`api/send-email.js` has the same problem as `api/login.js` used to: it is a
+Vercel serverless function, so on static hosting it returns 404 and campaigns
+cannot be sent at all. Sending needs a server.
+
+`api/login.js` is the server-side variant of the sign-in, used only when the app
+is deployed to Vercel. It reads `LOGIN_EMAIL`, `LOGIN_PASSWORD` and
+`SESSION_SECRET`, and is unused by a static deployment.
 
 | Script | What it does |
 | --- | --- |
