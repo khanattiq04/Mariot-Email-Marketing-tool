@@ -4,6 +4,7 @@ import RichTextEditor from "./RichTextEditor";
 import Login from "./Login";
 import { fetchSession, logout } from "./auth";
 import "./App.css";
+import mariotIcon from "./mariot-icon.webp";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -280,7 +281,10 @@ export default function App() {
     <div className="app">
       <Toaster position="top-right" />
       <header className="header">
-        <div className="logo">✉️ Mariot Store</div>
+        <div className="logo">
+          <img className="logo-icon" src={mariotIcon} alt="" />
+          Mariot Store
+        </div>
         <div className="tagline">Email Marketing Tool</div>
         <div className="header-actions">
           {sessionEmail ? <span className="header-user">{sessionEmail}</span> : null}

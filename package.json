@@ -21,6 +21,8 @@
     "start": "react-scripts start",
     "dev": "node scripts/dev.js",
     "dev:api": "node scripts/dev.js --api-only",
+    "icons": "node scripts/make-icons.js",
+    "prebuild": "npm run icons",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
