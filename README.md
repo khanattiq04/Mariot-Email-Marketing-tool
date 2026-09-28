@@ -1,6 +1,6 @@
-# email-marketing-tool
+# email-marketing-tool-Mariot-Store
 
-React app for sending email campaigns through Brevo, Resend, MailerSend, or
+app for sending email campaigns through Brevo, Resend, MailerSend, or
 EmailOctopus.
 
 ## Running locally
@@ -48,7 +48,7 @@ the list and nothing is sent.
 
 `MAIL_FROM_EMAIL`, `MAIL_FROM_NAME` and `MAIL_UNSUBSCRIBE_EMAIL` control the
 sender address, the display name and the `List-Unsubscribe` header. They default
-to `admin@mariotkitchen.com` / `Mariot Store`.
+to `marketing@mariotstore.com` / `Mariot Store`.
 
 All values are read server-side only, so they are never exposed to the browser.
 
@@ -69,35 +69,6 @@ The upload preset must exist in the Cloudinary dashboard with **Signing Mode**
 set to *Unsigned*. Because the values are baked in at build time, changing them
 requires a rebuild and redeploy (restart `npm run dev` locally). Fallback
 defaults live in `src/App.js`.
-
-### Login
-
-The app is gated behind a sign-in form that `src/auth.js` checks in the browser,
-so it needs no server function and works on static hosting:
-
-| Variable | Purpose |
-| --- | --- |
-| `REACT_APP_LOGIN_EMAIL` | The only account allowed to sign in |
-| `REACT_APP_LOGIN_PASSWORD` | Its password |
-
-Both are `REACT_APP_*` values, so they are inlined into the bundle at build
-time. Set them before `npm run build`, and rebuild and re-upload after any
-change - environment variables set in a hosting panel are never read by a static
-site. A successful sign-in stores a 12 hour session in `localStorage`.
-
-**This gate only hides the interface.** The password ships inside
-`build/static/js/*.js`, so anyone can read it straight out of the bundle, and
-`api/send-email.js` is still callable by anyone who knows the URL. For a real
-lock on static hosting, use the host's directory password protection (an Apache
-`.htpasswd`, e.g. Hostinger's "Password Protect Directories").
-
-`api/send-email.js` has the same problem as `api/login.js` used to: it is a
-Vercel serverless function, so on static hosting it returns 404 and campaigns
-cannot be sent at all. Sending needs a server.
-
-`api/login.js` is the server-side variant of the sign-in, used only when the app
-is deployed to Vercel. It reads `LOGIN_EMAIL`, `LOGIN_PASSWORD` and
-`SESSION_SECRET`, and is unused by a static deployment.
 
 | Script | What it does |
 | --- | --- |
@@ -120,7 +91,7 @@ Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
 The page will reload when you make changes.\
-You may also see any lint errors in the console.
+You may also see any lint erros in the console.
 
 ### `npm test`
 
@@ -133,7 +104,6 @@ Builds the app for production to the `build` folder.\
 It correctly bundles React in production mode and optimizes the build for the best performance.
 
 The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
@@ -145,7 +115,6 @@ If you aren't satisfied with the build tool and configuration choices, you can `
 
 Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
 
 ## Learn More
 
