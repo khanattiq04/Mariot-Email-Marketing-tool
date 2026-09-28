@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import RichTextEditor from "./RichTextEditor";
 import Login from "./Login";
 import { fetchSession, logout } from "./auth";
 import "./App.css";
+import { buildEmailHtml } from "./emailTemplate";
 import mariotIcon from "./mariot-icon.webp";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -81,6 +82,22 @@ function prepareForUpload(file) {
   return isEmailUnsupported(file) ? convertToJpeg(file) : Promise.resolve(file);
 }
 
+// The preview mirrors the inputs below; joining them with NUL keeps the
+// debounce key unambiguous no matter what the editors contain.
+const PREVIEW_KEY_SEP = "\u0000";
+
+// Keeps the preview from reloading on every keystroke while typing.
+function useDebounced(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
 // Provider daily limits (free tier)
 const PROVIDER_LIMITS = {
   brevo:      300,
@@ -115,6 +132,7 @@ export default function App() {
   const [session, setSession] = useState("checking"); // "checking" | "authed" | "anon"
   const [sessionEmail, setSessionEmail] = useState("");
   const stopRef = useRef(false);
+  const [previewDevice, setPreviewDevice] = useState("desktop"); // "desktop" | "mobile"
 
   useEffect(() => {
     let active = true;
@@ -288,6 +306,25 @@ export default function App() {
     toast("Stopping after current email...", { icon: "⛔" });
   };
 
+  // The preview renders the same HTML the providers send, so what is shown on
+  // the right is what lands in the recipient inbox.
+  const previewKey = useDebounced(
+    [message, message2, heroImage, image1, image2, image3].join(PREVIEW_KEY_SEP)
+  );
+
+  const previewHtml = useMemo(() => {
+    const [html1, html2, hero, img1, img2, img3] = previewKey.split(PREVIEW_KEY_SEP);
+    return buildEmailHtml({
+      fromName: SENDER_NAME,
+      message: html1,
+      message2: html2,
+      heroImage: hero,
+      image1: img1,
+      image2: img2,
+      image3: img3,
+    });
+  }, [previewKey]);
+
   if (session === "checking") {
     return <div className="login-screen" />;
   }
@@ -318,6 +355,8 @@ export default function App() {
       </header>
 
       <main className="main">
+      <div className="workspace">
+        <div className="compose-col">
 
         {/* ── Sender Info ── */}
         <div className="card">
@@ -661,6 +700,57 @@ export default function App() {
           </div>
         )}
 
+        </div>
+
+        {/* ── Live inbox preview ── */}
+        <aside className="preview-col">
+          <div className="card preview-card">
+            <div className="preview-head">
+              <h2>👀 Inbox Preview</h2>
+              <div className="device-toggle">
+                {["desktop", "mobile"].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`device-btn${previewDevice === mode ? " active" : ""}`}
+                    onClick={() => setPreviewDevice(mode)}
+                  >
+                    {mode === "desktop" ? "🖥️ Desktop" : "📱 Mobile"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="inbox">
+              <div className="inbox-top">
+                <div className="inbox-avatar">M</div>
+                <div className="inbox-meta">
+                  <div className="inbox-from">
+                    {SENDER_NAME}
+                    <span className="inbox-email">&lt;marketing@mariotstore.com&gt;</span>
+                  </div>
+                  <div className="inbox-subject">{subject || "(no subject yet)"}</div>
+                </div>
+                <div className="inbox-time">now</div>
+              </div>
+
+              <div className={`inbox-body ${previewDevice}`}>
+                <iframe
+                  title="Email preview"
+                  className="preview-frame"
+                  srcDoc={previewHtml}
+                  sandbox=""
+                />
+              </div>
+            </div>
+
+            <p className="preview-hint">
+              Live render of the email HTML: 650px card on desktop, images stacked on
+              mobile. Empty image slots appear as grey placeholders.
+            </p>
+          </div>
+        </aside>
+      </div>
       </main>
     </div>
   );

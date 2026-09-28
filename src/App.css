@@ -7,7 +7,7 @@ body {
   min-height: 100vh;
 }
 
-.app { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
+.app { max-width: 1360px; margin: 0 auto; padding: 2rem 1.25rem; }
 
 .header {
   text-align: center;
@@ -350,3 +350,129 @@ input[type="range"] { width: 100%; accent-color: #3182ce; }
 }
 
 .btn-logout:hover { border-color: #3182ce; color: #3182ce; }
+
+
+/* ── Two-column workspace: compose on the left, inbox preview on the right ── */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.compose-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.preview-col {
+  position: sticky;
+  top: 1.25rem;
+  min-width: 0;
+}
+
+.preview-card { gap: 0.9rem; }
+
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.device-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: #edf2f7;
+  border-radius: 999px;
+}
+
+.device-btn {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4a5568;
+  cursor: pointer;
+}
+.device-btn.active { background: white; color: #2b6cb0; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+/* Mock mail client, so the preview reads like a real inbox */
+.inbox {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+}
+
+.inbox-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fbfdff;
+}
+
+.inbox-avatar {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.inbox-meta { flex: 1; min-width: 0; }
+
+.inbox-from {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1a202c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-email { margin-left: 6px; font-size: 0.78rem; font-weight: 400; color: #718096; }
+
+.inbox-subject {
+  margin-top: 2px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2d3748;
+  word-break: break-word;
+}
+
+.inbox-time { font-size: 0.72rem; color: #a0aec0; }
+
+.inbox-body { padding: 12px; background: #f5f5f5; }
+.inbox-body.mobile .preview-frame { width: 390px; max-width: 100%; margin: 0 auto; }
+
+.preview-frame {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  min-height: 520px;
+  border: 0;
+  border-radius: 8px;
+  background: #f5f5f5;
+}
+
+.preview-hint { font-size: 0.75rem; color: #718096; line-height: 1.5; }
+
+@media (max-width: 1080px) {
+  .workspace { grid-template-columns: 1fr; }
+  .preview-col { position: static; }
+  .preview-frame { height: 65vh; min-height: 460px; }
+}
