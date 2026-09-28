@@ -263,7 +263,7 @@ export default function App() {
           addLog("📥 Queued for " + email + "  [" + icon + " " + usedProvider + "]" + reference + note, "warn");
         } else {
           addLog("✅ Sent to " + email + "  [" + icon + " " + usedProvider + "]" + reference + note, "success");
-        }         }         }         }
+        }
         setProgress({ done: i + 1, total: list.length });
 
       } catch (err) {
