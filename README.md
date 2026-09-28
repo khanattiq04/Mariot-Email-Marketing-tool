@@ -116,9 +116,6 @@ also live on different hosts: set `REACT_APP_API_BASE` (for example
 `https://your-app.vercel.app`) before `npm run build` and the app posts there
 instead - the endpoint already sends permissive CORS headers.
 
-Whichever host runs the API is the only place provider keys exist; they are
-read from the environment and never reach the browser. Only `REACT_APP_*`
-values are inlined into the bundle.
 
 | Script | What it does |
 | --- | --- |
