@@ -94,7 +94,7 @@ Then upload `.env` **outside the web root**, one level above `public_html`:
 
 ```
 /home/uXXXX/domains/marketing.mariotstore.com/.env
-```
++++
 
 That is the location the endpoint looks in first. `public_html/api/.env`
 works as well - the shipped `.htaccess` blocks it from being downloaded - but
