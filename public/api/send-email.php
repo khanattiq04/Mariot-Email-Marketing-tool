@@ -132,7 +132,7 @@ function unsubscribe_headers(): array {
 
 // ------------------------------------------------------------------- http --
 
-/** @return array{status:int, body:array, raw:string} */
+/** @return array{status:int, body:array, raw:string, headers:array} */
 function http_json(string $method, string $url, array $headers, ?array $payload = null): array {
   $handle = curl_init($url);
   if ($handle === false) throw new RuntimeException('Could not initialise curl');
@@ -149,6 +149,16 @@ function http_json(string $method, string $url, array $headers, ?array $payload 
     $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
   }
 
+  // Capture response headers too: MailerSend reports its message id there.
+  $responseHeaders = array();
+  $options[CURLOPT_HEADERFUNCTION] = function ($handle, $line) use (&$responseHeaders) {
+    $parts = explode(':', $line, 2);
+    if (count($parts) === 2) {
+      $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+    }
+    return strlen($line);
+  };
+
   curl_setopt_array($handle, $options);
 
   $raw    = curl_exec($handle);
@@ -162,9 +172,10 @@ function http_json(string $method, string $url, array $headers, ?array $payload 
   $decoded = json_decode((string) $raw, true);
 
   return array(
-    'status' => $status,
-    'body'   => is_array($decoded) ? $decoded : array(),
-    'raw'    => (string) $raw,
+    'status'  => $status,
+    'body'    => is_array($decoded) ? $decoded : array(),
+    'raw'     => (string) $raw,
+    'headers' => $responseHeaders,
   );
 }
 
@@ -544,7 +555,7 @@ function assert_brevo_sender_valid(): void {
   );
 }
 
-function send_via_brevo(string $email, array $mail): void {
+function send_via_brevo(string $email, array $mail): array {
   if (cfg('brevoKey') === '') throw new RuntimeException('BREVO_API_KEY is not set');
 
   assert_brevo_sender_valid();
@@ -563,9 +574,14 @@ function send_via_brevo(string $email, array $mail): void {
   ));
 
   if (!is_ok($response)) throw new RuntimeException(provider_error($response));
+
+  return array(
+    'status' => 'sent',
+    'id'     => isset($response['body']['messageId']) ? (string) $response['body']['messageId'] : '',
+  );
 }
 
-function send_via_resend(string $email, array $mail): void {
+function send_via_resend(string $email, array $mail): array {
   if (cfg('resendKey') === '') throw new RuntimeException('RESEND_API_KEY is not set');
 
   $response = http_json('POST', 'https://api.resend.com/emails', array(
@@ -581,9 +597,14 @@ function send_via_resend(string $email, array $mail): void {
   ));
 
   if (!is_ok($response)) throw new RuntimeException(provider_error($response));
+
+  return array(
+    'status' => 'sent',
+    'id'     => isset($response['body']['id']) ? (string) $response['body']['id'] : '',
+  );
 }
 
-function send_via_mailersend(string $email, array $mail): void {
+function send_via_mailersend(string $email, array $mail): array {
   if (cfg('mailerSendKey') === '') throw new RuntimeException('MAILERSEND_API_KEY is not set');
 
   $headers = array();
@@ -604,18 +625,25 @@ function send_via_mailersend(string $email, array $mail): void {
   ));
 
   if (!is_ok($response)) throw new RuntimeException(provider_error($response));
+
+  $messageId = isset($response['headers']['x-message-id']) ? $response['headers']['x-message-id'] : '';
+  if ($messageId === '' && isset($response['body']['message_id'])) {
+    $messageId = (string) $response['body']['message_id'];
+  }
+
+  return array('status' => 'sent', 'id' => $messageId);
 }
 
-function email_octopus_request(string $path, array $body, bool $ignoreConflict = false): void {
+function email_octopus_request(string $path, array $body, bool $ignoreConflict = false): array {
   $response = http_json('POST', rtrim(cfg('eoBaseUrl'), '/') . $path, array(
     'Authorization: Bearer ' . cfg('eoKey'),
     'Content-Type: application/json',
   ), $body);
 
-  if (is_ok($response)) return;
+  if (is_ok($response)) return $response['body'];
 
   // Re-adding an existing contact is a no-op, not a failure.
-  if ($ignoreConflict && $response['status'] === 409) return;
+  if ($ignoreConflict && $response['status'] === 409) return array();
 
   throw new RuntimeException(provider_error($response));
 }
@@ -625,24 +653,39 @@ function email_octopus_request(string $path, array $body, bool $ignoreConflict =
  * list and, when an automation id is configured, queues them into that
  * automation. The email that actually goes out is the dashboard one.
  */
-function send_via_emailoctopus(string $email, array $mail): void {
+function send_via_emailoctopus(string $email, array $mail): array {
   if (cfg('eoKey') === '') throw new RuntimeException('EMAILOCTOPUS_API_KEY is not set');
   if (cfg('eoListId') === '') throw new RuntimeException('EMAILOCTOPUS_LIST_ID is not set');
 
-  email_octopus_request(
+  $contact = email_octopus_request(
     '/lists/' . rawurlencode(cfg('eoListId')) . '/contacts',
     array('email_address' => $email, 'status' => 'subscribed'),
     true
   );
 
-  if (cfg('eoAutomationId') !== '') {
-    // The queue endpoint accepts the contact id or an MD5 hash of the
-    // lowercased email address, so no lookup round-trip is needed.
-    email_octopus_request(
-      '/automations/' . rawurlencode(cfg('eoAutomationId')) . '/queue',
-      array('contact_id' => md5(strtolower(trim($email))))
+  // The queue endpoint accepts the contact id or an MD5 hash of the lowercased
+  // email address, so a reference always exists even for an existing contact.
+  $contactId    = isset($contact['id']) ? (string) $contact['id'] : md5(strtolower(trim($email)));
+  $automationId = cfg('eoAutomationId');
+
+  if ($automationId === '') {
+    return array(
+      'status' => 'queued',
+      'id'     => $contactId,
+      'note'   => 'No automation is configured, so nothing was emailed - the recipient was only added to the list.',
     );
   }
+
+  email_octopus_request(
+    '/automations/' . rawurlencode($automationId) . '/queue',
+    array('contact_id' => $contactId)
+  );
+
+  return array(
+    'status' => 'queued',
+    'id'     => $contactId,
+    'note'   => 'Queued into the EmailOctopus automation; the delivered email is the one built in EmailOctopus.',
+  );
 }
 
 // ------------------------------------------------------------------- main --
@@ -690,12 +733,13 @@ function send_campaign(array $body): void {
     $usedProvider = $provider;
     $sent         = false;
     $failures     = array();
+    $outcome      = array();
 
     try {
       if ($provider === 'auto') {
         foreach ($autoOrder as $name) {
           try {
-            call_user_func($senders[$name], $email, $mail);
+            $outcome      = call_user_func($senders[$name], $email, $mail);
             $usedProvider = $name;
             $sent         = true;
             break;
@@ -719,13 +763,27 @@ function send_campaign(array $body): void {
           throw new RuntimeException('Unknown provider: ' . $provider);
         }
 
-        call_user_func($senders[$provider], $email, $mail);
+        $outcome      = call_user_func($senders[$provider], $email, $mail);
         $usedProvider = $provider;
         $sent         = true;
       }
 
-      error_log('[send-email] Sent [' . $usedProvider . ']: ' . $email);
-      $results[] = array('email' => $email, 'status' => 'sent', 'provider' => $usedProvider);
+      // Providers return a reference for the message they accepted, so a "sent"
+      // can be looked up in the provider dashboard instead of taken on trust.
+      $entry = array(
+        'email'    => $email,
+        'status'   => isset($outcome['status']) ? $outcome['status'] : 'sent',
+        'provider' => $usedProvider,
+      );
+      if (isset($outcome['id']) && $outcome['id'] !== '') $entry['id'] = $outcome['id'];
+      if (isset($outcome['note']) && $outcome['note'] !== '') $entry['note'] = $outcome['note'];
+
+      error_log(
+        '[send-email] ' . $entry['status'] . ' [' . $usedProvider . ']: ' . $email .
+        (isset($entry['id']) ? ' id=' . $entry['id'] : '')
+      );
+
+      $results[] = $entry;
     } catch (Throwable $err) {
       error_log('[send-email] Failed [' . $usedProvider . ']: ' . $email . ' - ' . $err->getMessage());
       $results[] = array(

@@ -242,7 +242,7 @@ export default function App() {
         // failures inside `results`, so surface those instead of logging a send
         // that never happened.
         const result = data.results && data.results[0];
-        if (result && result.status !== "sent") {
+        if (result && result.status === "failed") {
           throw new Error(result.error || "Failed to send");
         }
 
@@ -253,8 +253,17 @@ export default function App() {
           [usedProvider]: (prev[usedProvider] || 0) + 1,
         }));
 
-        const icon = PROVIDER_ICONS[usedProvider] || "✉️";
-        addLog(`✅ Sent to ${email}  [${icon} ${usedProvider}]`, "success");
+                                        const icon = PROVIDER_ICONS[usedProvider] || "✉️";
+        const reference = result && result.id ? "  id: " + result.id : "";
+        const note = result && result.note ? " - " + result.note : "";
+
+        if (result && result.status === "queued") {
+          // EmailOctopus only adds the recipient to a list (and optionally
+          // queues an automation), so nothing reaches an inbox yet.
+          addLog("📥 Queued for " + email + "  [" + icon + " " + usedProvider + "]" + reference + note, "warn");
+        } else {
+          addLog("✅ Sent to " + email + "  [" + icon + " " + usedProvider + "]" + reference + note, "success");
+        }         }         }         }
         setProgress({ done: i + 1, total: list.length });
 
       } catch (err) {
