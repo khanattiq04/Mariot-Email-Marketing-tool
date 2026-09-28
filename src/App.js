@@ -18,6 +18,12 @@ const CLOUDINARY_UPLOAD_PRESET =
 const CLOUDINARY_UPLOAD_URL =
   `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
+// Where the sending API lives. Empty means this host, which is right for both
+// setups: Vercel serves api/send-email.js and PHP hosting serves
+// public/api/send-email.php on the same origin. Set REACT_APP_API_BASE at build
+// time to post campaigns to a different origin instead.
+const API_BASE = (process.env.REACT_APP_API_BASE || "").replace(/\/+$/, "");
+
 // Email clients do not render AVIF or HEIC, and Cloudinary hands those files
 // back untouched, so they arrive in the inbox looking broken. Convert them to
 // JPEG in the browser before upload; every other format is uploaded unchanged.
@@ -212,7 +218,7 @@ export default function App() {
       const email = list[i];
 
       try {
-        const response = await fetch("/api/send-email", {
+        const response = await fetch(API_BASE + "/api/send-email", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -231,6 +237,14 @@ export default function App() {
 
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Failed to send");
+
+        // A 200 only means the request was handled: the API reports per-address
+        // failures inside `results`, so surface those instead of logging a send
+        // that never happened.
+        const result = data.results && data.results[0];
+        if (result && result.status !== "sent") {
+          throw new Error(result.error || "Failed to send");
+        }
 
         // Track which provider was actually used
         const usedProvider = data.results?.[0]?.provider || provider;

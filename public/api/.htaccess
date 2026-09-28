@@ -1,0 +1,24 @@
+# /api - PHP endpoints for the deployed site.
+#
+# The React app posts to /api/send-email, the path Vercel would serve from
+# api/send-email.js. PHP needs the .php extension, so map the extensionless URL
+# onto the file; /api/send-email.php keeps working as well.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([A-Za-z0-9_-]+)/?$ $1.php [L,QSA]
+</IfModule>
+
+# Never serve credentials: .env holds the provider API keys.
+<FilesMatch "^\.env">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>

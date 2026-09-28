@@ -70,6 +70,56 @@ set to *Unsigned*. Because the values are baked in at build time, changing them
 requires a rebuild and redeploy (restart `npm run dev` locally). Fallback
 defaults live in `src/App.js`.
 
+## Deploying
+
+The build is a static bundle, but sending needs a server, because the browser
+must never see the provider API keys. Two hosting setups work from the same
+build.
+
+### PHP hosting (Hostinger, cPanel, any Apache/PHP host)
+
+`public/api/send-email.php` is the server-side endpoint for hosts that cannot
+run Node, and `build/api/` contains it plus the `.htaccess` that maps the
+`POST /api/send-email` URL the app calls onto it. Upload the *contents* of
+`build/` into the web root, so that:
+
+```
+build/index.html         -> public_html/index.html
+build/static/...         -> public_html/static/...
+build/api/.htaccess      -> public_html/api/.htaccess
+build/api/send-email.php -> public_html/api/send-email.php
+```
+
+Then upload `.env` **outside the web root**, one level above `public_html`:
+
+```
+/home/uXXXX/domains/marketing.mariotstore.com/.env
+```
+
+That is the location the endpoint looks in first. `public_html/api/.env`
+works as well - the shipped `.htaccess` blocks it from being downloaded - but
+above the web root is safer. Use the same keys as the local `.env`.
+
+To check the endpoint is alive, open `https://<domain>/api/send-email` in a
+browser. It should reply `{"error":"Method not allowed"}`, not the host's 404
+page. A 404 means `api/` did not land in the web root, or PHP is not handling
+that folder.
+
+Requirements: PHP 7.4+ with the `curl` extension, which Hostinger enables by
+default.
+
+### Vercel
+
+Deploying the repository to Vercel serves `api/send-email.js` as a serverless
+function on the same origin, so no PHP is involved. The site and the API can
+also live on different hosts: set `REACT_APP_API_BASE` (for example
+`https://your-app.vercel.app`) before `npm run build` and the app posts there
+instead - the endpoint already sends permissive CORS headers.
+
+Whichever host runs the API is the only place provider keys exist; they are
+read from the environment and never reach the browser. Only `REACT_APP_*`
+values are inlined into the bundle.
+
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | React app + local API runner |
