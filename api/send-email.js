@@ -44,6 +44,11 @@ const unsubscribeHeaderList = [
 ];
 
 // ── Shared HTML email builder ─────────────────────────────────
+// Header logo. It is the full Mariot logo at the web root of whichever host
+// serves this app, so recipients load it from there. Override with MAIL_LOGO_URL
+// when the app is hosted somewhere else.
+const logoUrl = process.env.MAIL_LOGO_URL || "https://marketing.mariotstore.com/mariot-logo.png?v=4";
+
 function buildHtml(
   fromName,
   htmlMessage,
@@ -92,7 +97,6 @@ function buildHtml(
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
       .px-social  { padding:18px 16px !important; }
-      .h1-title   { font-size:22px !important; line-height:28px !important; }
       .body-text  { font-size:14px !important; line-height:26px !important; }
 
       /* Nothing in the message content may overflow the screen */
@@ -117,7 +121,6 @@ function buildHtml(
       .px-content { padding:22px 16px !important; }
       .px-images  { padding:0 16px 6px !important; }
       .px-actions { padding:14px 16px 4px !important; }
-      .h1-title   { font-size:20px !important; line-height:26px !important; }
       .body-text  { font-size:14px !important; line-height:24px !important; }
       .btn        { padding:14px 18px !important; font-size:14px !important; }
       .social-link { margin:0 6px !important; }
@@ -137,10 +140,8 @@ function buildHtml(
     style="width:100%;max-width:650px;background:#ffffff;border-radius:12px;overflow:hidden;">
 
   <tr>
-    <td class="px-header" style="background:#111111;padding:30px 40px;">
-      <h1 class="h1-title" style="margin:0;font-size:28px;color:#ffffff;letter-spacing:1px;">
-        ${fromName || defaultFromName}
-      </h1>
+    <td class="px-header" style="padding:30px 40px;">
+      <img src="${logoUrl}" width="239" height="54" alt="${fromName || defaultFromName}" style="display:block;width:239px;height:54px;border:0;outline:none;text-decoration:none;" />
     </td>
   </tr>
 

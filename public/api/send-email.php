@@ -110,6 +110,7 @@ function cfg(string $key): string {
       'fromEmail'        => env_value('MAIL_FROM_EMAIL', 'marketing@mariotstore.com'),
       'fromName'         => env_value('MAIL_FROM_NAME', 'Mariot Store'),
       'unsubscribeEmail' => env_value('MAIL_UNSUBSCRIBE_EMAIL', 'marketing@mariotstore.com'),
+      'logoUrl'          => env_value('MAIL_LOGO_URL', 'https://marketing.mariotstore.com/mariot-logo.png?v=4'),
       'brevoKey'         => env_value('BREVO_API_KEY'),
       'resendKey'        => env_value('RESEND_API_KEY'),
       'mailerSendKey'    => env_value('MAILERSEND_API_KEY'),
@@ -240,6 +241,7 @@ function sender_name(array $mail): string {
  */
 function build_html(array $mail): string {
   $fromName    = sender_name($mail);
+  $logoUrl     = cfg('logoUrl');
   $htmlMessage = isset($mail['html']) ? (string) $mail['html'] : '';
   $heroImage   = isset($mail['heroImage']) ? (string) $mail['heroImage'] : '';
   $image1      = isset($mail['image1']) ? (string) $mail['image1'] : '';
@@ -287,7 +289,6 @@ function build_html(array $mail): string {
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
       .px-social  { padding:18px 16px !important; }
-      .h1-title   { font-size:22px !important; line-height:28px !important; }
       .body-text  { font-size:14px !important; line-height:26px !important; }
 
       /* Nothing in the message content may overflow the screen */
@@ -312,7 +313,6 @@ function build_html(array $mail): string {
       .px-content { padding:22px 16px !important; }
       .px-images  { padding:0 16px 6px !important; }
       .px-actions { padding:14px 16px 4px !important; }
-      .h1-title   { font-size:20px !important; line-height:26px !important; }
       .body-text  { font-size:14px !important; line-height:24px !important; }
       .btn        { padding:14px 18px !important; font-size:14px !important; }
       .social-link { margin:0 6px !important; }
@@ -332,10 +332,8 @@ function build_html(array $mail): string {
     style="width:100%;max-width:650px;background:#ffffff;border-radius:12px;overflow:hidden;">
 
   <tr>
-    <td class="px-header" style="background:#111111;padding:30px 40px;">
-      <h1 class="h1-title" style="margin:0;font-size:28px;color:#ffffff;letter-spacing:1px;">
-        {$fromName}
-      </h1>
+    <td class="px-header" style="padding:30px 40px;">
+      <img src="{$logoUrl}" width="239" height="54" alt="{$fromName}" style="display:block;width:239px;height:54px;border:0;outline:none;text-decoration:none;" />
     </td>
   </tr>
 

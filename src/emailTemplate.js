@@ -8,6 +8,13 @@
 // the real email would show a broken-image icon there, and a grey block makes
 // the empty slot obvious while composing.
 
+// Header logo. It is the full Mariot logo that ships in public/, so the preview
+// shows the same image the providers serve. The preview iframe renders from a
+// srcdoc document, which needs an absolute URL rather than a path.
+const LOGO_URL =
+  (typeof window !== "undefined" && window.location ? window.location.origin : "") +
+  "/mariot-logo.png?v=4";
+
 function slot(url, label, { radius = 0, minHeight = 180 } = {}) {
   const base = "display:block;width:100%;max-width:100%;";
   const rounded = radius ? `border-radius:${radius}px;` : "";
@@ -59,7 +66,6 @@ export function buildEmailHtml({
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
       .px-social  { padding:18px 16px !important; }
-      .h1-title   { font-size:22px !important; line-height:28px !important; }
       .body-text  { font-size:14px !important; line-height:26px !important; }
       .px-content, .px-content * { max-width:100% !important; }
       .stack-row  { display:block !important; width:100% !important; }
@@ -75,7 +81,6 @@ export function buildEmailHtml({
       .px-header  { padding:20px 16px !important; }
       .px-content { padding:22px 16px !important; }
       .px-images  { padding:0 16px 6px !important; }
-      .h1-title   { font-size:20px !important; line-height:26px !important; }
       .body-text  { font-size:14px !important; line-height:24px !important; }
       .social-link { margin:0 6px !important; }
     }
@@ -90,10 +95,8 @@ export function buildEmailHtml({
     style="width:100%;max-width:650px;background:#ffffff;border-radius:12px;overflow:hidden;">
 
   <tr>
-    <td class="px-header" style="background:#111111;padding:30px 40px;">
-      <h1 class="h1-title" style="margin:0;font-size:28px;color:#ffffff;letter-spacing:1px;">
-        ${sender}
-      </h1>
+    <td class="px-header" style="padding:30px 40px;">
+      <img src="${LOGO_URL}" width="239" height="54" alt="${sender}" style="display:block;width:239px;height:54px;border:0;outline:none;text-decoration:none;" />
     </td>
   </tr>
 

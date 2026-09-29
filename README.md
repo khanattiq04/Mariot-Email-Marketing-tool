@@ -50,6 +50,9 @@ the list and nothing is sent.
 sender address, the display name and the `List-Unsubscribe` header. They default
 to `marketing@mariotstore.com` / `Mariot Store`.
 
+`MAIL_LOGO_URL` overrides the logo image used in the email header; it defaults
+to `https://marketing.mariotstore.com/mariot-logo.png?v=4` (the `?v=` suffix busts the image caches mail clients keep per URL). The header logo is served from the deployed site, so `build/mariot-logo.png` must be uploaded with the app, and the `?v=` value must be bumped whenever the asset changes.
+
 All values are read server-side only, so they are never exposed to the browser.
 
 On Vercel, set these variables in the project dashboard and redeploy. `.env` is
