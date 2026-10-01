@@ -111,6 +111,9 @@ Two things to know:
   unsubscribe request with no human behind it. The notification says so; check
   the address before removing it.
 
+
+  ................
+
 ### Images (Cloudinary)
 
 Image uploads run in the browser using Cloudinary's unsigned upload flow, so
