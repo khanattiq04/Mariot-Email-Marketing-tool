@@ -109,8 +109,10 @@ function cfg(string $key): string {
     $config = array(
       'fromEmail'        => env_value('MAIL_FROM_EMAIL', 'marketing@mariotstore.com'),
       'fromName'         => env_value('MAIL_FROM_NAME', 'Mariot Store'),
-      'unsubscribeEmail' => env_value('MAIL_UNSUBSCRIBE_EMAIL', 'marketing@mariotstore.com'),
+      'unsubscribeEmail' => env_value('MAIL_UNSUBSCRIBE_EMAIL', 'admin@mariotkitchen.com'),
       'logoUrl'          => env_value('MAIL_LOGO_URL', 'https://marketing.mariotstore.com/mariot-logo.png?v=4'),
+      'socialIconBase'   => rtrim(env_value('MAIL_SOCIAL_ICON_BASE', 'https://marketing.mariotstore.com/icons'), '/'),
+      'unsubscribeUrl'   => env_value('MAIL_UNSUBSCRIBE_URL', 'https://marketing.mariotstore.com/api/unsubscribe'),
       'brevoKey'         => env_value('BREVO_API_KEY'),
       'resendKey'        => env_value('RESEND_API_KEY'),
       'mailerSendKey'    => env_value('MAILERSEND_API_KEY'),
@@ -236,6 +238,68 @@ function sender_name(array $mail): string {
 // ------------------------------------------------------------ email markup --
 
 /**
+ * Footer links, drawn as the brand icons in public/icons rather than as text.
+ * The icons are served from whichever host serves the app, so the preview and
+ * the delivered email load the same images; override with MAIL_SOCIAL_ICON_BASE
+ * when the app is hosted somewhere else.
+ */
+function social_links_html(): string {
+  $links = array(
+    array('Facebook',  'facebook',  'https://www.facebook.com/mariotuae'),
+    array('Instagram', 'instagram', 'https://www.instagram.com/mariotuae/'),
+    array('X',         'x',         'https://x.com/MariotUae'),
+    array('YouTube',   'youtube',   'https://www.youtube.com/channel/UCUCWktTJNpRzUEJ58JHLu_g'),
+    array('TikTok',    'tiktok',    'https://www.tiktok.com/@mariotmedia'),
+    array('LinkedIn',  'linkedin',  'https://www.linkedin.com/in/mariot-kitchen-equipment-8a34a4108/?isSelfProfile=false'),
+    array('Pinterest', 'pinterest', 'https://www.pinterest.com/mariotuae/'),
+  );
+
+  $base = cfg('socialIconBase');
+  $size = 32;
+  $html = array();
+
+  foreach ($links as $link) {
+    list($name, $icon, $url) = $link;
+    // Icons only, so every link carries its network name as alt text: that is
+    // what a client shows when it blocks images.
+    $html[] = '<a class="social-link" href="' . $url . '"'
+      . ' style="display:inline-block;margin:0 8px;text-decoration:none;">'
+      . '<img src="' . $base . '/' . $icon . '.png?v=1"'
+      . ' width="' . $size . '" height="' . $size . '" alt="' . $name . '"'
+      . ' style="display:block;width:' . $size . 'px;height:' . $size . 'px;border:0;outline:none;text-decoration:none;" /></a>';
+  }
+
+  return implode("\n      ", $html);
+}
+
+/**
+ * Campaigns are addressed by email only and this tool stores no names, so the
+ * unsubscribe link carries the address and the admin notification derives a
+ * readable name from it.
+ */
+function recipient_name(string $email): string {
+  $local = explode('@', $email)[0];
+  $parts = preg_split('/[._\-+]+/', $local, -1, PREG_SPLIT_NO_EMPTY);
+
+  if (!is_array($parts) || !$parts) return 'Unknown';
+
+  $name = array();
+  foreach ($parts as $part) {
+    $name[] = strtoupper(substr($part, 0, 1)) . substr($part, 1);
+  }
+
+  return implode(' ', $name);
+}
+
+/**
+ * The Unsubscribe button target. public/api/unsubscribe.php answers it on PHP
+ * hosting, api/unsubscribe.js on Vercel.
+ */
+function unsubscribe_link(string $email): string {
+  return rtrim(cfg('unsubscribeUrl'), '/') . '?email=' . rawurlencode($email);
+}
+
+/**
  * Same markup the Node handler builds, so a message sent from this host is
  * indistinguishable from one sent by the Vercel function.
  */
@@ -248,6 +312,8 @@ function build_html(array $mail): string {
   $image2      = isset($mail['image2']) ? (string) $mail['image2'] : '';
   $image3      = isset($mail['image3']) ? (string) $mail['image3'] : '';
   $message2    = isset($mail['message2']) ? (string) $mail['message2'] : '';
+  $socialLinks = social_links_html();
+  $unsubscribe = unsubscribe_link(isset($mail['to']) ? (string) $mail['to'] : '');
 
   return <<<HTML
 <!DOCTYPE html>
@@ -289,6 +355,7 @@ function build_html(array $mail): string {
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
       .px-social  { padding:18px 16px !important; }
+      .px-unsub   { padding:0 16px 22px !important; }
       .body-text  { font-size:14px !important; line-height:26px !important; }
 
       /* Nothing in the message content may overflow the screen */
@@ -434,33 +501,15 @@ function build_html(array $mail): string {
   </td>
 </tr>
 
+  <tr>
+    <td class="px-social" align="center" style="padding:25px;">
+      {$socialLinks}
+  </td>
+</tr>
+
 <tr>
-  <td class="px-social" align="center" style="padding:25px;">
-
-    <a
-      class="social-link"
-      href="https://www.facebook.com/mariotuae"
-      style="
-        color:#333;
-        text-decoration:none;
-        margin:0 10px;
-      "
-    >
-      Facebook
-    </a>
-
-    <a
-      class="social-link"
-      href="https://www.instagram.com/mariotuae/"
-      style="
-        color:#333;
-        text-decoration:none;
-        margin:0 10px;
-      "
-    >
-      Instagram
-    </a>
-
+  <td class="px-unsub" align="center" style="padding:0 20px 28px;">
+    <a class="unsub-btn" href="{$unsubscribe}" style="display:inline-block;background:#f4f4f4;border:1px solid #e3e3e3;color:#6d6d6d;text-decoration:none;padding:11px 26px;border-radius:30px;font-size:12px;">Unsubscribe</a>
   </td>
 </tr>
 
@@ -732,6 +781,10 @@ function send_campaign(array $body): void {
     $sent         = false;
     $failures     = array();
     $outcome      = array();
+
+    // build_html() puts the recipient's own unsubscribe link in the footer, so
+    // the address has to travel with the message.
+    $mail['to'] = $email;
 
     try {
       if ($provider === 'auto') {

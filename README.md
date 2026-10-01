@@ -58,6 +58,59 @@ All values are read server-side only, so they are never exposed to the browser.
 On Vercel, set these variables in the project dashboard and redeploy. `.env` is
 gitignored and is only read by the local dev runner.
 
+### Social icons
+
+The email footer links to the social accounts as icons rather than as text. The
+PNGs live in `public/icons/` (`facebook`, `instagram`, `x`, `youtube`, `tiktok`,
+`linkedin`, `pinterest`) and are served from the deployed site, so `npm run
+build` must ship them with the app - upload `build/icons/` together with
+`build/index.html`. They are painted in each network's own brand colours and
+carry the network name as `alt` text, which is what a client shows when it
+blocks images.
+
+`MAIL_SOCIAL_ICON_BASE` overrides the folder they are loaded from; it defaults
+to `https://marketing.mariotstore.com/icons`. As with the logo, the templates
+request them with a `?v=`, which must be bumped whenever the PNGs change.
+
+Regenerate them after adding a network or changing a brand colour:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-social-icons.ps1
+```
+
+That script needs Windows (it draws with WPF, like `scripts/make-icons.ps1`),
+but nothing else - the glyph outlines are embedded in it. The icons are
+committed, so a build never has to regenerate them.
+
+### Unsubscribe
+
+The footer carries an `Unsubscribe` button under the social icons. The link
+carries the recipient's address (`?email=`), so a click needs no session and no
+subscriber list: `api/unsubscribe.js` (and its PHP twin
+`public/api/unsubscribe.php`) emails `MAIL_UNSUBSCRIBE_EMAIL` with the person's
+address, a name and the request time, then shows the recipient a confirmation
+page.
+
+This tool addresses campaigns by email and stores no names, so the name in that
+notification is derived from the address (`jane.smith@example.com` -> `Jane
+Smith`). The notification goes through the same providers as `auto` in
+`api/send-email.js` (Brevo, then Resend, then MailerSend), so whichever key is
+set will work.
+
+`MAIL_UNSUBSCRIBE_URL` overrides the button's target; it defaults to
+`https://marketing.mariotstore.com/api/unsubscribe`. On Vercel, `api/*.js` is
+deployed for you; on PHP hosting, upload `build/api/unsubscribe.php` together
+with the other API files (`.htaccess` maps `/api/unsubscribe` to it).
+
+Two things to know:
+
+- The button only *notifies the admin*. It does not remove the address from any
+  provider's list, and the `List-Unsubscribe` header already points at
+  `MAIL_UNSUBSCRIBE_EMAIL` for one-click clients.
+- Email link scanners sometimes open links in a message, which can trigger an
+  unsubscribe request with no human behind it. The notification says so; check
+  the address before removing it.
+
 ### Images (Cloudinary)
 
 Image uploads run in the browser using Cloudinary's unsigned upload flow, so

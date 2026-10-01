@@ -15,6 +15,52 @@ const LOGO_URL =
   (typeof window !== "undefined" && window.location ? window.location.origin : "") +
   "/mariot-logo.png?v=4";
 
+// Social icons for the footer. They sit next to the logo in public/icons and are
+// served from whichever host serves the app, so the preview and the delivered
+// email load the same images. Bump the ?v= when the PNGs are regenerated with
+// scripts/make-social-icons.ps1, so clients drop the copy they have cached.
+const SOCIAL_ICON_BASE =
+  (typeof window !== "undefined" && window.location ? window.location.origin : "") +
+  "/icons";
+
+const SOCIAL_ICON_SIZE = 32;
+
+const SOCIAL_LINKS = [
+  { name: "Facebook", icon: "facebook", url: "https://www.facebook.com/mariotuae" },
+  { name: "Instagram", icon: "instagram", url: "https://www.instagram.com/mariotuae/" },
+  { name: "X", icon: "x", url: "https://x.com/MariotUae" },
+  {
+    name: "YouTube",
+    icon: "youtube",
+    url: "https://www.youtube.com/channel/UCUCWktTJNpRzUEJ58JHLu_g",
+  },
+  { name: "TikTok", icon: "tiktok", url: "https://www.tiktok.com/@mariotmedia" },
+  {
+    name: "LinkedIn",
+    icon: "linkedin",
+    url: "https://www.linkedin.com/in/mariot-kitchen-equipment-8a34a4108/?isSelfProfile=false",
+  },
+  { name: "Pinterest", icon: "pinterest", url: "https://www.pinterest.com/mariotuae/" },
+];
+
+// Icons only, so every link carries its network name as alt text: that is what
+// a client shows when it blocks images.
+function socialLinks() {
+  return SOCIAL_LINKS.map(
+    ({ name, icon, url }) =>
+      `<a class="social-link" href="${url}" style="display:inline-block;margin:0 8px;text-decoration:none;"><img src="${SOCIAL_ICON_BASE}/${icon}.png?v=1" width="${SOCIAL_ICON_SIZE}" height="${SOCIAL_ICON_SIZE}" alt="${name}" style="display:block;width:${SOCIAL_ICON_SIZE}px;height:${SOCIAL_ICON_SIZE}px;border:0;outline:none;text-decoration:none;" /></a>`
+  ).join("\n      ");
+}
+
+// Unsubscribe button. A real campaign builds this link per recipient in
+// api/send-email.js and public/api/send-email.php; the preview has no recipient
+// behind it, so it links a sample address.
+const UNSUBSCRIBE_URL =
+  (typeof window !== "undefined" && window.location ? window.location.origin : "") +
+  "/api/unsubscribe";
+
+const PREVIEW_RECIPIENT = "recipient@example.com";
+
 function slot(url, label, { radius = 0, minHeight = 180 } = {}) {
   const base = "display:block;width:100%;max-width:100%;";
   const rounded = radius ? `border-radius:${radius}px;` : "";
@@ -66,6 +112,7 @@ export function buildEmailHtml({
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
       .px-social  { padding:18px 16px !important; }
+      .px-unsub   { padding:0 16px 22px !important; }
       .body-text  { font-size:14px !important; line-height:26px !important; }
       .px-content, .px-content * { max-width:100% !important; }
       .stack-row  { display:block !important; width:100% !important; }
@@ -145,8 +192,13 @@ export function buildEmailHtml({
 
   <tr>
     <td class="px-social" align="center" style="padding:25px;">
-      <a class="social-link" href="https://www.facebook.com/mariotuae" style="color:#333;text-decoration:none;margin:0 10px;">Facebook</a>
-      <a class="social-link" href="https://www.instagram.com/mariotuae/" style="color:#333;text-decoration:none;margin:0 10px;">Instagram</a>
+      ${socialLinks()}
+    </td>
+  </tr>
+
+  <tr>
+    <td class="px-unsub" align="center" style="padding:0 20px 28px;">
+      <a class="unsub-btn" href="${UNSUBSCRIBE_URL}?email=${encodeURIComponent(PREVIEW_RECIPIENT)}" style="display:inline-block;background:#f4f4f4;border:1px solid #e3e3e3;color:#6d6d6d;text-decoration:none;padding:11px 26px;border-radius:30px;font-size:12px;">Unsubscribe</a>
     </td>
   </tr>
 

@@ -31,7 +31,7 @@ const EO_BASE_URL    = process.env.EMAILOCTOPUS_BASE_URL || "https://api.emailoc
 // without touching code.
 const fromEmail        = process.env.MAIL_FROM_EMAIL || "marketing@mariotstore.com";
 const defaultFromName  = process.env.MAIL_FROM_NAME || "Mariot Store";
-const unsubscribeEmail = process.env.MAIL_UNSUBSCRIBE_EMAIL || "marketing@mariotstore.com";
+const unsubscribeEmail = process.env.MAIL_UNSUBSCRIBE_EMAIL || "admin@mariotkitchen.com";
 
 const unsubscribeHeaders = {
   "List-Unsubscribe":      `<mailto:${unsubscribeEmail}>`,
@@ -49,6 +49,68 @@ const unsubscribeHeaderList = [
 // when the app is hosted somewhere else.
 const logoUrl = process.env.MAIL_LOGO_URL || "https://marketing.mariotstore.com/mariot-logo.png?v=4";
 
+// Social icons for the footer. They sit next to the logo in public/icons on
+// whichever host serves this app, so recipients load them from there. Override
+// with MAIL_SOCIAL_ICON_BASE when the app is hosted somewhere else.
+const socialIconBase = (
+  process.env.MAIL_SOCIAL_ICON_BASE || "https://marketing.mariotstore.com/icons"
+).replace(/\/+$/, "");
+
+const SOCIAL_ICON_SIZE = 32;
+
+const socialLinks = [
+  { name: "Facebook", icon: "facebook", url: "https://www.facebook.com/mariotuae" },
+  { name: "Instagram", icon: "instagram", url: "https://www.instagram.com/mariotuae/" },
+  { name: "X", icon: "x", url: "https://x.com/MariotUae" },
+  {
+    name: "YouTube",
+    icon: "youtube",
+    url: "https://www.youtube.com/channel/UCUCWktTJNpRzUEJ58JHLu_g",
+  },
+  { name: "TikTok", icon: "tiktok", url: "https://www.tiktok.com/@mariotmedia" },
+  {
+    name: "LinkedIn",
+    icon: "linkedin",
+    url: "https://www.linkedin.com/in/mariot-kitchen-equipment-8a34a4108/?isSelfProfile=false",
+  },
+  { name: "Pinterest", icon: "pinterest", url: "https://www.pinterest.com/mariotuae/" },
+];
+
+// Icons only, so every link carries its network name as alt text: that is what
+// a client shows when it blocks images.
+function socialLinksHtml() {
+  return socialLinks
+    .map(
+      ({ name, icon, url }) =>
+        `<a class="social-link" href="${url}" style="display:inline-block;margin:0 8px;text-decoration:none;"><img src="${socialIconBase}/${icon}.png?v=1" width="${SOCIAL_ICON_SIZE}" height="${SOCIAL_ICON_SIZE}" alt="${name}" style="display:block;width:${SOCIAL_ICON_SIZE}px;height:${SOCIAL_ICON_SIZE}px;border:0;outline:none;text-decoration:none;" /></a>`
+    )
+    .join("\n      ");
+}
+
+// Unsubscribe button. The link carries the recipient's address, so the click
+// reaches the endpoint that knows who asked to be removed. Override with
+// MAIL_UNSUBSCRIBE_URL when the app is hosted somewhere else.
+const unsubscribeUrl =
+  process.env.MAIL_UNSUBSCRIBE_URL || "https://marketing.mariotstore.com/api/unsubscribe";
+
+// Campaigns are addressed by email only and this tool stores no names, so derive
+// a readable one from the address ("john.doe@example.com" -> "John Doe") for the
+// notification the endpoint sends to the admin.
+function recipientName(email) {
+  return (
+    String(email || "")
+      .split("@")[0]
+      .split(/[._\-+]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || "Unknown"
+  );
+}
+
+function unsubscribeLink(email) {
+  return `${unsubscribeUrl}?email=${encodeURIComponent(String(email || ""))}`;
+}
+
 function buildHtml(
   fromName,
   htmlMessage,
@@ -56,7 +118,8 @@ function buildHtml(
   image1,
   image2,
   image3,
-  message2
+  message2,
+  recipientEmail
 ) {
   return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
@@ -97,6 +160,7 @@ function buildHtml(
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
       .px-social  { padding:18px 16px !important; }
+      .px-unsub   { padding:0 16px 22px !important; }
       .body-text  { font-size:14px !important; line-height:26px !important; }
 
       /* Nothing in the message content may overflow the screen */
@@ -244,31 +308,13 @@ function buildHtml(
 
 <tr>
   <td class="px-social" align="center" style="padding:25px;">
+      ${socialLinksHtml()}
+  </td>
+</tr>
 
-    <a
-      class="social-link"
-      href="https://www.facebook.com/mariotuae"
-      style="
-        color:#333;
-        text-decoration:none;
-        margin:0 10px;
-      "
-    >
-      Facebook
-    </a>
-
-    <a
-      class="social-link"
-      href="https://www.instagram.com/mariotuae/"
-      style="
-        color:#333;
-        text-decoration:none;
-        margin:0 10px;
-      "
-    >
-      Instagram
-    </a>
-
+<tr>
+  <td class="px-unsub" align="center" style="padding:0 20px 28px;">
+    <a class="unsub-btn" href="${unsubscribeLink(recipientEmail)}" style="display:inline-block;background:#f4f4f4;border:1px solid #e3e3e3;color:#6d6d6d;text-decoration:none;padding:11px 26px;border-radius:30px;font-size:12px;">Unsubscribe</a>
   </td>
 </tr>
 
@@ -361,7 +407,8 @@ async function sendViaBrevo(
   image1,
   image2,
   image3,
-  message2
+  message2,
+  email
 ),
   });
 }
@@ -391,7 +438,8 @@ async function sendViaResend(
   image1,
   image2,
   image3,
-  message2
+  message2,
+  email
 ),
     headers: unsubscribeHeaders,
   });
@@ -425,7 +473,8 @@ async function sendViaMailerSend(
   image1,
   image2,
   image3,
-  message2
+  message2,
+  email
 ))
     .setText(message)
     .setHeaders(unsubscribeHeaderList);
