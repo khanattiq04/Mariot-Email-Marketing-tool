@@ -129,6 +129,19 @@ set to *Unsigned*. Because the values are baked in at build time, changing them
 requires a rebuild and redeploy (restart `npm run dev` locally). Fallback
 defaults live in `src/App.js`.
 
+### Mariot Kitchen Edit email template
+
+Campaigns use a responsive editorial layout for Mariot Store's kitchen
+equipment niche inspired by the complete Figma email: a mint-green masthead
+and headline, lead image and introduction, a Popular product gallery,
+dark-green Inspirations stories, charcoal Hotspots cards, then the full
+unsubscribe and branded social footer. The headline and introductory copy are
+editable in the composer. Eight images are supported: one lead image, three
+Popular products, two Inspirations features, and two Hotspots.
+The Popular gallery keeps all three images on desktop and shows its first two
+side by side on mobile. Template images scale to the available width while
+preserving their original proportions, so the complete image remains visible.
+
 ## Deploying
 
 The build is a static bundle, but sending needs a server, because the browser

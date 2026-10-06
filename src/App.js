@@ -120,6 +120,7 @@ const SENDER_NAME = "Mariot Store";
 export default function App() {
   const [emails,        setEmails]        = useState("");
   const [subject,       setSubject]       = useState("");
+  const [headline,      setHeadline]      = useState("");
   const [message,       setMessage]       = useState("");
   const [delaySeconds,  setDelaySeconds]  = useState(5);
   const [isSending,     setIsSending]     = useState(false);
@@ -161,6 +162,10 @@ export default function App() {
   const [image1, setImage1] = useState("");
   const [image2, setImage2] = useState("");
   const [image3, setImage3] = useState("");
+  const [image4, setImage4] = useState("");
+  const [image5, setImage5] = useState("");
+  const [image6, setImage6] = useState("");
+  const [image7, setImage7] = useState("");
   const [message2, setMessage2] = useState("");
 
   const uploadImage = async (file, setter) => {
@@ -242,12 +247,17 @@ export default function App() {
           body: JSON.stringify({
           emails: [email],
           subject,
+          headline,
           message,
           message2,
           heroImage,
           image1,
           image2,
           image3,
+          image4,
+          image5,
+          image6,
+          image7,
           fromName: SENDER_NAME,
           provider
         }),
@@ -309,19 +319,24 @@ export default function App() {
   // The preview renders the same HTML the providers send, so what is shown on
   // the right is what lands in the recipient inbox.
   const previewKey = useDebounced(
-    [message, message2, heroImage, image1, image2, image3].join(PREVIEW_KEY_SEP)
+    [headline, message, message2, heroImage, image1, image2, image3, image4, image5, image6, image7].join(PREVIEW_KEY_SEP)
   );
 
   const previewHtml = useMemo(() => {
-    const [html1, html2, hero, img1, img2, img3] = previewKey.split(PREVIEW_KEY_SEP);
+    const [title, html1, html2, hero, img1, img2, img3, img4, img5, img6, img7] = previewKey.split(PREVIEW_KEY_SEP);
     return buildEmailHtml({
       fromName: SENDER_NAME,
+      headline: title,
       message: html1,
       message2: html2,
       heroImage: hero,
       image1: img1,
       image2: img2,
       image3: img3,
+      image4: img4,
+      image5: img5,
+      image6: img6,
+      image7: img7,
     });
   }, [previewKey]);
 
@@ -469,7 +484,17 @@ export default function App() {
     onChange={(e) => setSubject(e.target.value)}
   />
 
-  <label>Hero Image</label>
+  <label htmlFor="campaign-headline">Newsletter headline</label>
+  <input
+    id="campaign-headline"
+    type="text"
+    placeholder="e.g. The essentials of a better kitchen"
+    value={headline}
+    onChange={(e) => setHeadline(e.target.value)}
+  />
+  <p className="field-hint">This is the large headline in the mint feature panel.</p>
+
+  <label>Featured kitchen image</label>
 
 <input
   type="text"
@@ -501,15 +526,15 @@ export default function App() {
   />
 )}
 
-  <label>Text Content 1</label>
+  <label>Introduction</label>
   <RichTextEditor
     value={message}
     onChange={setMessage}
-    placeholder="Write your message... select text to style it"
+    placeholder="Introduce this campaign or featured collection..."
     rows={6}
   />
 
-  <label>Image 1</label>
+  <label>Popular product image 1</label>
 
 <input
   type="text"
@@ -539,7 +564,7 @@ export default function App() {
   />
 )}
 
-  <label>Image 2</label>
+  <label>Popular product image 2</label>
 
 <input
   type="text"
@@ -569,7 +594,7 @@ export default function App() {
   />
 )}
 
-  <label>Image 3</label>
+  <label>Popular product image 3</label>
 
 <input
   type="text"
@@ -599,11 +624,30 @@ export default function App() {
   />
 )}
 
-  <label>Text Content 2</label>
+{[
+  ["Inspirations image 1", image4, setImage4],
+  ["Inspirations image 2", image5, setImage5],
+  ["Hotspots image 1", image6, setImage6],
+  ["Hotspots image 2", image7, setImage7],
+].map(([label, image, setter]) => (
+  <div className="template-image-field" key={label}>
+    <label>{label}</label>
+    <input type="text" value={image} readOnly aria-label={`${label} URL`} />
+    <input
+      type="file"
+      accept="image/*"
+      aria-label={`Upload ${label.toLowerCase()}`}
+      onChange={(e) => uploadImage(e.target.files[0], setter)}
+    />
+    {image && <img className="template-image-thumb" src={image} alt="" />}
+  </div>
+))}
+
+  <label>Popular section copy</label>
   <RichTextEditor
     value={message2}
     onChange={setMessage2}
-    placeholder="Write your second message... select text to style it"
+    placeholder="Add more product details or a short closing note..."
     rows={6}
   />
 </div>

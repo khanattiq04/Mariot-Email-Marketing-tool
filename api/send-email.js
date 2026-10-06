@@ -111,16 +111,62 @@ function unsubscribeLink(email) {
   return `${unsubscribeUrl}?email=${encodeURIComponent(String(email || ""))}`;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function emailImageSlot(url, label, height = 180, className = "") {
+  if (url) {
+    return `<img class="fluid-img ${className}" src="${escapeHtml(url)}" alt="${escapeHtml(label)}" style="display:block;width:100%;max-width:100%;height:auto;object-fit:contain;" />`;
+  }
+
+  return `<div class="image-placeholder ${className}" style="box-sizing:border-box;width:100%;height:${height}px;min-height:${height}px;background:#e8e8e5;border:1px dashed #aeb5b1;color:#62716b;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:${height}px;text-align:center;">${label}</div>`;
+}
+
+function inspirationStory(image, label, date, title, copy) {
+  return `<tr><td class="story-card" style="padding:0 0 38px;">
+    ${emailImageSlot(image, label, 240, "inspiration-image")}
+    <p style="margin:22px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;letter-spacing:2px;color:#c6ded6;">${date}</p>
+    <h3 style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:1.4;letter-spacing:3px;text-transform:uppercase;color:#ffffff;">${title}</h3>
+    <p style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.8;color:#e0ece8;">${copy}</p>
+    <a href="https://mariotstore.com/en/shop-by-brands" style="display:inline-block;background:#35dfb3;color:#183e37;padding:14px 24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;text-decoration:none;">EXPLORE MORE&nbsp; &#8250;</a>
+  </td></tr>`;
+}
+
+function hotspotStory(image, label, date, title, copy) {
+  return `<td class="hotspot-col" width="50%" valign="top" style="width:50%;padding:0 10px;">
+    ${emailImageSlot(image, label, 165, "hotspot-image")}
+    <p style="margin:20px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;letter-spacing:2px;color:#bcbcbc;">${date}</p>
+    <h3 style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.45;letter-spacing:2px;text-transform:uppercase;color:#ffffff;">${title}</h3>
+    <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.75;color:#dedede;">${copy}</p>
+    <a href="https://mariotstore.com/en/shop" style="display:inline-block;border:1px solid #f1f1f1;color:#ffffff;padding:12px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;text-decoration:none;">Shop Now&nbsp; &#8250;</a>
+  </td>`;
+}
+
 function buildHtml(
   fromName,
+  headline,
   htmlMessage,
   heroImage,
   image1,
   image2,
   image3,
   message2,
+  image4,
+  image5,
+  image6,
+  image7,
   recipientEmail
 ) {
+  const safeHeadline = escapeHtml(headline || "The essentials of a better kitchen");
+  const safeFromName = escapeHtml(fromName || defaultFromName);
+  const intro = htmlMessage || "<p>Thoughtful equipment makes every service run more smoothly. Discover reliable tools and professional solutions, selected for the kitchens that count on them every day.</p>";
+  const popularCopy = message2 || "From first prep to final plate, the right equipment helps your team do its best work. Explore some of the Mariot Store favourites chosen for performance, quality and lasting value.";
   return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -146,16 +192,22 @@ function buildHtml(
 
     /* Fluid container + fluid images, so the email fits any screen width */
     .email-container { width:100% !important; max-width:650px !important; }
-    .fluid-img { display:block !important; width:100% !important; max-width:100% !important; height:auto !important; }
-    .content-text, .content-text * { word-wrap:break-word !important; overflow-wrap:break-word !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
+    .fluid-img { display:block !important; width:100% !important; max-width:100% !important; height:auto !important; object-fit:contain !important; }
+    .fluid-img.inspiration-image { max-width:480px !important; margin-left:auto !important; margin-right:auto !important; }
+    .image-placeholder.inspiration-image { max-width:480px !important; margin-left:auto !important; margin-right:auto !important; }
+    .content-text, .content-text * { font-family:Arial,Helvetica,sans-serif !important; word-wrap:break-word !important; overflow-wrap:break-word !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
     .content-text img { width:auto !important; max-width:100% !important; height:auto !important; }
     .btn { display:inline-block; }
 
     /* Mobile phones */
     @media only screen and (max-width:660px) {
       .email-container { width:100% !important; max-width:100% !important; }
+      .fluid-img.inspiration-image, .image-placeholder.inspiration-image { max-width:100% !important; }
       .px-card    { padding:18px 10px 0 !important; }
       .px-header  { padding:24px 20px !important; }
+      .px-nav-link { font-size:11px !important; }
+      .px-title { padding:34px 24px 40px !important; }
+      .px-title h1 { font-size:34px !important; }
       .px-content { padding:26px 20px !important; }
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
@@ -165,6 +217,9 @@ function buildHtml(
 
       /* Nothing in the message content may overflow the screen */
       .px-content, .px-content * { max-width:100% !important; }
+
+      .popular-col { display:table-cell !important; width:50% !important; padding:0 5px !important; }
+      .popular-third { display:none !important; }
 
       /* Stack the three image columns on top of each other */
       .stack-row  { display:block !important; width:100% !important; }
@@ -176,12 +231,15 @@ function buildHtml(
       .btn { display:block !important; width:100% !important; box-sizing:border-box !important; margin:0 0 12px 0 !important; text-align:center !important; }
 
       .social-link { margin:0 8px !important; }
+      .hotspot-col { display:block !important; width:100% !important; padding:0 0 30px !important; }
     }
 
     /* Small phones */
     @media only screen and (max-width:400px) {
       .px-card    { padding:12px 6px 0 !important; }
       .px-header  { padding:20px 16px !important; }
+      .px-title { padding:28px 18px 32px !important; }
+      .px-title h1 { font-size:29px !important; }
       .px-content { padding:22px 16px !important; }
       .px-images  { padding:0 16px 6px !important; }
       .px-actions { padding:14px 16px 4px !important; }
@@ -191,66 +249,76 @@ function buildHtml(
     }
   </style>
 </head>
-<body style="margin:0;padding:0;width:100%;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f5f5f5;">
+<body style="margin:0;padding:0;width:100%;background:#f6f8f4;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f6f8f4;">
 <tr>
-<td class="px-card" align="center" style="padding:30px 10px 0;">
+<td class="px-card" align="center" style="padding:24px 10px;">
 
   <!--[if mso]>
   <table role="presentation" align="center" width="650" cellpadding="0" cellspacing="0" border="0"><tr><td>
   <![endif]-->
 
   <table role="presentation" class="email-container" align="center" width="100%" cellpadding="0" cellspacing="0" border="0"
-    style="width:100%;max-width:650px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    style="width:100%;max-width:650px;background:#ffffff;overflow:hidden;">
 
   <tr>
-    <td class="px-header" style="padding:30px 40px;">
-      <img src="${logoUrl}" width="239" height="54" alt="${fromName || defaultFromName}" style="display:block;width:239px;height:54px;border:0;outline:none;text-decoration:none;" />
+    <td class="px-header" style="padding:20px 34px;background:#35dfb3;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="20%" align="left" class="px-nav-link" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;">
+            <a href="https://mariotstore.com/" style="color:#12342c;text-decoration:none;">Shop</a>
+          </td>
+          <td width="60%" align="center">
+            <a href="https://mariotstore.com/" style="display:inline-block;">
+              <img src="${logoUrl}" width="190" alt="${safeFromName}" style="display:block;width:190px;height:auto;max-width:100%;border:0;outline:none;text-decoration:none;" />
+            </a>
+          </td>
+          <td width="20%" align="right" class="px-nav-link" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;">
+            <a href="https://mariotstore.com/en/about" style="color:#12342c;text-decoration:none;">Discover</a>
+          </td>
+        </tr>
+      </table>
     </td>
   </tr>
 
   <tr>
-  <td>
-    <img
-      class="fluid-img"
-      src="${heroImage}"
-      width="100%"
-      style="display:block;width:100%;max-width:100%;height:auto;"
-    />
+  <td class="px-title" align="center" style="padding:40px 50px 48px;background:#35dfb3;color:#122c25;">
+    <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:16px;letter-spacing:2px;text-transform:uppercase;">Mariot Store&nbsp; / &nbsp;Kitchen Edit</p>
+    <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:46px;line-height:1.08;font-weight:700;letter-spacing:-1.2px;color:#122c25;">${safeHeadline}</h1>
   </td>
 </tr>
 
 <tr>
-  <td class="px-content content-text" style="padding:40px;">
-    <p class="body-text" style="font-size:14px;line-height:28px;color:#444;">
-      ${htmlMessage}
-    </p>
+  <td>${emailImageSlot(heroImage, "Upload the lead kitchen image", 260, "lead-image")}</td>
+</tr>
+
+<tr>
+  <td class="px-content content-text" style="padding:34px 38px 42px;background:#f6f8f4;">
+    <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:3px;color:#263d35;">MARIOT STORE&nbsp; / &nbsp;THE KITCHEN JOURNAL</p>
+    <h2 style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:21px;line-height:1.5;letter-spacing:3px;text-transform:uppercase;color:#172c27;">Notes from the kitchen</h2>
+    <div class="body-text" style="font-size:14px;line-height:28px;color:#444;">
+      ${intro}
+    </div>
   </td>
 </tr>
 
 <tr>
-  <td class="px-images" style="padding:0 20px 20px;">
+  <td class="px-images" style="padding:35px 34px 38px;background:#eeeeec;">
+    <h2 style="margin:0 0 24px;font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1.2;color:#242725;">Popular</h2>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
-      <tr class="stack-row">
+      <tr>
 
-        <td class="stack-col" width="33%" style="width:33%;">
-          <img class="fluid-img" src="${image1}" width="100%"
-            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
+        <td class="popular-col" width="33%" style="width:33%;padding-right:10px;">
+          ${emailImageSlot(image1, "Popular product image 1", 122, "popular-image")}
         </td>
 
-        <td class="spacer" width="2%" style="width:2%;font-size:0;line-height:0;"></td>
-
-        <td class="stack-col" width="33%" style="width:33%;">
-          <img class="fluid-img" src="${image2}" width="100%"
-            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
+        <td class="popular-col" width="34%" style="width:34%;padding:0 5px;">
+          ${emailImageSlot(image2, "Popular product image 2", 122, "popular-image")}
         </td>
 
-        <td class="spacer" width="2%" style="width:2%;font-size:0;line-height:0;"></td>
-
-        <td class="stack-col stack-col-last" width="33%" style="width:33%;">
-          <img class="fluid-img" src="${image3}" width="100%"
-            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
+        <td class="popular-col popular-third" width="33%" style="width:33%;padding-left:10px;">
+          ${emailImageSlot(image3, "Popular product image 3", 122, "popular-image")}
         </td>
 
       </tr>
@@ -260,61 +328,48 @@ function buildHtml(
 </tr>
 
 <tr>
-  <td class="px-content content-text" style="padding:40px;">
-    <p class="body-text" style="font-size:14px;line-height:28px;color:#444;">
-      ${message2}
-    </p>
+  <td class="content-text" style="padding:22px 38px 30px;background:#eeeeec;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.8;color:#414744;">
+    ${popularCopy}
   </td>
 </tr>
 
 <tr>
-  <td class="px-actions" align="center" style="padding:20px 20px 10px;">
-
-    <a
-      class="btn"
-      href="https://mariotstore.com/"
-      style="
-        display:inline-block;
-        background:#000;
-        color:#fff;
-        text-decoration:none;
-        padding:14px 30px;
-        border-radius:30px;
-        margin-right:10px;
-        font-size:14px;
-      "
-    >
-      Visit Us
-    </a>
-
-    <a
-      class="btn"
-      href="https://mariotstore.com/en/about"
-      style="
-        display:inline-block;
-        background:#eaeaea;
-        color:#111;
-        text-decoration:none;
-        padding:14px 30px;
-        border-radius:30px;
-        font-size:14px;
-      "
-    >
-      About Us
-    </a>
-
+  <td style="padding:32px 34px 4px;background:#1b4b42;">
+    <h2 style="margin:0 0 26px;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.2;color:#fff;">Inspirations</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      ${inspirationStory(image4, "Inspiration kitchen image 1", "MARIOT KITCHEN NOTES", "Made for the rhythm of service", "Discover dependable professional equipment designed to keep busy kitchens moving, shift after shift.")}
+      ${inspirationStory(image5, "Inspiration kitchen image 2", "THE DETAILS THAT MATTER", "Thoughtful tools. Better results.", "From careful preparation to confident presentation, find the equipment that brings your kitchen together.")}
+    </table>
   </td>
 </tr>
 
 <tr>
-  <td class="px-social" align="center" style="padding:25px;">
+  <td style="padding:32px 24px 40px;background:#292929;">
+    <h2 style="margin:0 10px 26px;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.2;color:#fff;">Hotspots</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      ${hotspotStory(image6, "Hotspot product image 1", "PREP&nbsp; / &nbsp;PERFORMANCE", "A sharper start to every service", "Reliable prep essentials help your team work efficiently from the first order to the last.")}
+      ${hotspotStory(image7, "Hotspot product image 2", "SERVICE&nbsp; / &nbsp;STYLE", "Bring your best to the pass", "Explore practical, professional favourites selected for the demands of modern kitchens.")}
+    </tr></table>
+  </td>
+</tr>
+
+<tr>
+  <td align="center" style="padding:24px 24px 8px;background:#f6f8f4;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.8;color:#555;">
+    <a href="${unsubscribeLink(recipientEmail)}" style="color:#555;text-decoration:underline;">Unsubscribe</a> &nbsp;|&nbsp;
+    <a href="https://mariotstore.com/" style="color:#555;text-decoration:underline;">View online</a><br/>
+    You’re receiving this email from Mariot Store.
+  </td>
+</tr>
+
+<tr>
+  <td class="px-social" align="center" style="padding:24px 25px 16px;background:#f6f8f4;border-top:1px solid #9cb9ad;">
       ${socialLinksHtml()}
   </td>
 </tr>
 
 <tr>
-  <td class="px-unsub" align="center" style="padding:0 20px 28px;">
-    <a class="unsub-btn" href="${unsubscribeLink(recipientEmail)}" style="display:inline-block;background:#f4f4f4;border:1px solid #e3e3e3;color:#6d6d6d;text-decoration:none;padding:11px 26px;border-radius:30px;font-size:12px;">Unsubscribe</a>
+  <td align="center" style="padding:0 20px 30px;background:#f6f8f4;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7;color:#666;">
+    Professional kitchen equipment, selected by Mariot Store.
   </td>
 </tr>
 
@@ -386,11 +441,16 @@ async function sendViaBrevo(
   htmlMessage,
   message,
   fromName,
+  headline,
   heroImage,
   image1,
   image2,
   image3,
-  message2
+  message2,
+  image4,
+  image5,
+  image6,
+  image7
 ) {
   await assertBrevoSenderValid();
 
@@ -402,12 +462,17 @@ async function sendViaBrevo(
     headers: unsubscribeHeaders,
     htmlContent: buildHtml(
   fromName,
-  htmlMessage,
+    headline,
+    htmlMessage,
   heroImage,
   image1,
   image2,
   image3,
   message2,
+  image4,
+  image5,
+  image6,
+  image7,
   email
 ),
   });
@@ -420,11 +485,16 @@ async function sendViaResend(
   htmlMessage,
   message,
   fromName,
+  headline,
   heroImage,
   image1,
   image2,
   image3,
-  message2
+  message2,
+  image4,
+  image5,
+  image6,
+  image7
 ) {
   const { error } = await resend.emails.send({
     from:        `${fromName || defaultFromName} <${fromEmail}>`,
@@ -433,12 +503,17 @@ async function sendViaResend(
     text:        message,
     html:        buildHtml(
   fromName,
+  headline,
   htmlMessage,
   heroImage,
   image1,
   image2,
   image3,
   message2,
+  image4,
+  image5,
+  image6,
+  image7,
   email
 ),
     headers: unsubscribeHeaders,
@@ -453,11 +528,16 @@ async function sendViaMailerSend(
   htmlMessage,
   message,
   fromName,
+  headline,
   heroImage,
   image1,
   image2,
   image3,
-  message2
+  message2,
+  image4,
+  image5,
+  image6,
+  image7
 ) {
   const sentFrom = new Sender(fromEmail, fromName || defaultFromName);
   const recipients = [new Recipient(email)];
@@ -468,12 +548,17 @@ async function sendViaMailerSend(
     .setSubject(subject)
     .setHtml(buildHtml(
   fromName,
+  headline,
   htmlMessage,
   heroImage,
   image1,
   image2,
   image3,
   message2,
+  image4,
+  image5,
+  image6,
+  image7,
   email
 ))
     .setText(message)
@@ -579,12 +664,17 @@ module.exports = async (req, res) => {
     const {
   emails,
   subject,
+  headline,
   message,
   message2,
   heroImage,
   image1,
   image2,
   image3,
+  image4,
+  image5,
+  image6,
+  image7,
   fromName,
   provider
 } = req.body;
@@ -598,7 +688,7 @@ module.exports = async (req, res) => {
 
     // Plain-text fallback (for the `text`/`textContent` fields some
     // providers use), derived by stripping tags from the HTML.
-    const plainTextMessage = message
+    const plainTextMessage = `${headline || "The essentials of a better kitchen"}\n\n` + message
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/p>/gi, "\n")
       .replace(/<[^>]+>/g, "")
@@ -628,11 +718,16 @@ module.exports = async (req, res) => {
                 htmlMessage,
                 plainTextMessage,
                 fromName,
+                headline,
                 heroImage,
                 image1,
                 image2,
                 image3,
-                message2
+                message2,
+                image4,
+                image5,
+                image6,
+                image7
               );
               usedProvider = p.name;
               sent = true;
@@ -661,11 +756,16 @@ module.exports = async (req, res) => {
             htmlMessage,
             plainTextMessage,
             fromName,
+            headline,
             heroImage,
             image1,
             image2,
             image3,
-            message2
+            message2,
+            image4,
+            image5,
+            image6,
+            image7
           );
           usedProvider = provider;
           sent = true;

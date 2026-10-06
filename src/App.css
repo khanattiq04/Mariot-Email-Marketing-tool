@@ -471,6 +471,19 @@ input[type="range"] { width: 100%; accent-color: #3182ce; }
 
 .preview-hint { font-size: 0.75rem; color: #718096; line-height: 1.5; }
 
+.template-image-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.template-image-thumb {
+  width: 150px;
+  max-height: 110px;
+  object-fit: cover;
+  margin-top: 0.25rem;
+}
+
 @media (max-width: 1080px) {
   .workspace { grid-template-columns: 1fr; }
   .preview-col { position: static; }

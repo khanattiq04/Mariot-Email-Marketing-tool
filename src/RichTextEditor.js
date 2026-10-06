@@ -37,6 +37,50 @@ export default function RichTextEditor({ value, onChange, placeholder, rows = 6 
     if (editorRef.current) onChange(editorRef.current.innerHTML);
   };
 
+  const handlePaste = (event) => {
+    event.preventDefault();
+    const clipboard = event.clipboardData;
+    let text = clipboard?.getData("text/plain") || "";
+
+    if (!text) {
+      const html = clipboard?.getData("text/html");
+      if (html) {
+        const pastedDocument = new DOMParser().parseFromString(html, "text/html");
+        text = pastedDocument.body.textContent || "";
+      }
+    }
+    if (!text || !editorRef.current) return;
+
+    const selection = window.getSelection();
+    const range = selection && selection.rangeCount > 0
+      ? selection.getRangeAt(0)
+      : document.createRange();
+    if (!editorRef.current.contains(range.startContainer)) {
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+    }
+    range.deleteContents();
+
+    const fragment = document.createDocumentFragment();
+    const lines = text.replace(/\r\n?/g, "\n").split("\n");
+    lines.forEach((line, index) => {
+      if (index > 0) fragment.appendChild(document.createElement("br"));
+      if (line) fragment.appendChild(document.createTextNode(line));
+    });
+    const lastNode = fragment.lastChild;
+    range.insertNode(fragment);
+
+    if (lastNode) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      savedRange.current = range.cloneRange();
+    }
+
+    emitChange();
+  };
+
   const saveSelection = () => {
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
@@ -117,7 +161,8 @@ export default function RichTextEditor({ value, onChange, placeholder, rows = 6 
           background: #fff; font-size: 13px; padding: 0 4px;
         }
         .rte-editor {
-          padding: 10px 12px; outline: none; font-size: 14px; line-height: 1.5;
+          padding: 10px 12px; outline: none; font-family: Arial, Helvetica, sans-serif;
+          font-size: 14px; line-height: 1.5;
         }
         .rte-editor:empty:before {
           content: attr(data-placeholder); color: #999;
@@ -163,6 +208,7 @@ export default function RichTextEditor({ value, onChange, placeholder, rows = 6 
         data-placeholder={placeholder}
         style={{ minHeight: `${rows * 22}px` }}
         onInput={emitChange}
+        onPaste={handlePaste}
         onMouseUp={saveSelection}
         onKeyUp={saveSelection}
       />

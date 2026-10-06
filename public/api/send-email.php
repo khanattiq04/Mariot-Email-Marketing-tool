@@ -303,15 +303,63 @@ function unsubscribe_link(string $email): string {
  * Same markup the Node handler builds, so a message sent from this host is
  * indistinguishable from one sent by the Vercel function.
  */
+function email_image_slot(string $url, string $label, int $height = 150, string $className = ''): string {
+  if ($url !== '') {
+    $safeUrl = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return '<img class="fluid-img ' . $className . '" src="' . $safeUrl . '" alt="' . $label . '" style="display:block;width:100%;max-width:100%;height:auto;object-fit:contain;" />';
+  }
+
+  return '<div class="image-placeholder ' . $className . '" style="box-sizing:border-box;width:100%;height:' . $height . 'px;min-height:' . $height . 'px;background:#e8e8e5;border:1px dashed #aeb5b1;color:#62716b;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:' . $height . 'px;text-align:center;">' . $label . '</div>';
+}
+
+function inspiration_card(string $image, string $label, string $date, string $title, string $copy): string {
+  return '<tr><td class="story-card" style="padding:0 0 38px;">'
+    . $image
+    . '<p style="margin:22px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;letter-spacing:2px;color:#c6ded6;">' . $date . '</p>'
+    . '<h3 style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:1.4;letter-spacing:3px;text-transform:uppercase;color:#ffffff;">' . $title . '</h3>'
+    . '<p style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.8;color:#e0ece8;">' . $copy . '</p>'
+    . '<a href="https://mariotstore.com/en/shop-by-brands" style="display:inline-block;background:#35dfb3;color:#183e37;padding:14px 24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;text-decoration:none;">EXPLORE MORE&nbsp; &#8250;</a>'
+    . '</td></tr>';
+}
+
+function hotspot_card(string $image, string $label, string $date, string $title, string $copy): string {
+  return '<td class="hotspot-col" width="50%" valign="top" style="width:50%;padding:0 10px;">'
+    . $image
+    . '<p style="margin:20px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;letter-spacing:2px;color:#bcbcbc;">' . $date . '</p>'
+    . '<h3 style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.45;letter-spacing:2px;text-transform:uppercase;color:#ffffff;">' . $title . '</h3>'
+    . '<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.75;color:#dedede;">' . $copy . '</p>'
+    . '<a href="https://mariotstore.com/en/shop" style="display:inline-block;border:1px solid #f1f1f1;color:#ffffff;padding:12px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;text-decoration:none;">Shop Now&nbsp; &#8250;</a>'
+    . '</td>';
+}
+
 function build_html(array $mail): string {
   $fromName    = sender_name($mail);
   $logoUrl     = cfg('logoUrl');
+  $headline    = htmlspecialchars(
+    isset($mail['headline']) && $mail['headline'] !== '' ? (string) $mail['headline'] : 'The essentials of a better kitchen',
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+  );
   $htmlMessage = isset($mail['html']) ? (string) $mail['html'] : '';
-  $heroImage   = isset($mail['heroImage']) ? (string) $mail['heroImage'] : '';
-  $image1      = isset($mail['image1']) ? (string) $mail['image1'] : '';
-  $image2      = isset($mail['image2']) ? (string) $mail['image2'] : '';
-  $image3      = isset($mail['image3']) ? (string) $mail['image3'] : '';
+  $heroImage   = email_image_slot(isset($mail['heroImage']) ? (string) $mail['heroImage'] : '', 'Upload the lead kitchen image', 260, 'lead-image');
+  $image1      = email_image_slot(isset($mail['image1']) ? (string) $mail['image1'] : '', 'Popular product image 1', 122, 'popular-image');
+  $image2      = email_image_slot(isset($mail['image2']) ? (string) $mail['image2'] : '', 'Popular product image 2', 122, 'popular-image');
+  $image3      = email_image_slot(isset($mail['image3']) ? (string) $mail['image3'] : '', 'Popular product image 3', 122, 'popular-image');
+  $image4      = email_image_slot(isset($mail['image4']) ? (string) $mail['image4'] : '', 'Inspiration kitchen image 1', 240, 'inspiration-image');
+  $image5      = email_image_slot(isset($mail['image5']) ? (string) $mail['image5'] : '', 'Inspiration kitchen image 2', 240, 'inspiration-image');
+  $image6      = email_image_slot(isset($mail['image6']) ? (string) $mail['image6'] : '', 'Hotspot product image 1', 165, 'hotspot-image');
+  $image7      = email_image_slot(isset($mail['image7']) ? (string) $mail['image7'] : '', 'Hotspot product image 2', 165, 'hotspot-image');
   $message2    = isset($mail['message2']) ? (string) $mail['message2'] : '';
+  $intro       = isset($mail['html']) && $mail['html'] !== ''
+    ? (string) $mail['html']
+    : '<p>Thoughtful equipment makes every service run more smoothly. Discover reliable tools and professional solutions, selected for the kitchens that count on them every day.</p>';
+  $popularCopy = $message2 !== ''
+    ? $message2
+    : 'From first prep to final plate, the right equipment helps your team do its best work. Explore some of the Mariot Store favourites chosen for performance, quality and lasting value.';
+  $inspiration1 = inspiration_card($image4, 'Inspiration kitchen image 1', 'MARIOT KITCHEN NOTES', 'Made for the rhythm of service', 'Discover dependable professional equipment designed to keep busy kitchens moving, shift after shift.');
+  $inspiration2 = inspiration_card($image5, 'Inspiration kitchen image 2', 'THE DETAILS THAT MATTER', 'Thoughtful tools. Better results.', 'From careful preparation to confident presentation, find the equipment that brings your kitchen together.');
+  $hotspot1 = hotspot_card($image6, 'Hotspot product image 1', 'PREP&nbsp; / &nbsp;PERFORMANCE', 'A sharper start to every service', 'Reliable prep essentials help your team work efficiently from the first order to the last.');
+  $hotspot2 = hotspot_card($image7, 'Hotspot product image 2', 'SERVICE&nbsp; / &nbsp;STYLE', 'Bring your best to the pass', 'Explore practical, professional favourites selected for the demands of modern kitchens.');
   $socialLinks = social_links_html();
   $unsubscribe = unsubscribe_link(isset($mail['to']) ? (string) $mail['to'] : '');
 
@@ -341,16 +389,22 @@ function build_html(array $mail): string {
 
     /* Fluid container + fluid images, so the email fits any screen width */
     .email-container { width:100% !important; max-width:650px !important; }
-    .fluid-img { display:block !important; width:100% !important; max-width:100% !important; height:auto !important; }
-    .content-text, .content-text * { word-wrap:break-word !important; overflow-wrap:break-word !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
+    .fluid-img { display:block !important; width:100% !important; max-width:100% !important; height:auto !important; object-fit:contain !important; }
+    .fluid-img.inspiration-image { max-width:480px !important; margin-left:auto !important; margin-right:auto !important; }
+    .image-placeholder.inspiration-image { max-width:480px !important; margin-left:auto !important; margin-right:auto !important; }
+    .content-text, .content-text * { font-family:Arial,Helvetica,sans-serif !important; word-wrap:break-word !important; overflow-wrap:break-word !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
     .content-text img { width:auto !important; max-width:100% !important; height:auto !important; }
     .btn { display:inline-block; }
 
     /* Mobile phones */
     @media only screen and (max-width:660px) {
       .email-container { width:100% !important; max-width:100% !important; }
+      .fluid-img.inspiration-image, .image-placeholder.inspiration-image { max-width:100% !important; }
       .px-card    { padding:18px 10px 0 !important; }
       .px-header  { padding:24px 20px !important; }
+      .px-nav-link { font-size:11px !important; }
+      .px-title { padding:34px 24px 40px !important; }
+      .px-title h1 { font-size:34px !important; }
       .px-content { padding:26px 20px !important; }
       .px-images  { padding:0 20px 8px !important; }
       .px-actions { padding:16px 20px 6px !important; }
@@ -361,8 +415,10 @@ function build_html(array $mail): string {
       /* Nothing in the message content may overflow the screen */
       .px-content, .px-content * { max-width:100% !important; }
 
-      /* Stack the three image columns on top of each other */
-      .stack-row  { display:block !important; width:100% !important; }
+      .popular-col { display:table-cell !important; width:50% !important; padding:0 5px !important; }
+      .popular-third { display:none !important; }
+
+      /* Stack other image rows, leaving the Popular gallery in two columns */
       .stack-col  { display:block !important; width:100% !important; padding:0 0 14px 0 !important; }
       .stack-col-last { padding:0 !important; }
       .spacer     { display:none !important; width:0 !important; max-width:0 !important; font-size:0 !important; line-height:0 !important; }
@@ -371,12 +427,15 @@ function build_html(array $mail): string {
       .btn { display:block !important; width:100% !important; box-sizing:border-box !important; margin:0 0 12px 0 !important; text-align:center !important; }
 
       .social-link { margin:0 8px !important; }
+      .hotspot-col { display:block !important; width:100% !important; padding:0 0 30px !important; }
     }
 
     /* Small phones */
     @media only screen and (max-width:400px) {
       .px-card    { padding:12px 6px 0 !important; }
       .px-header  { padding:20px 16px !important; }
+      .px-title { padding:28px 18px 32px !important; }
+      .px-title h1 { font-size:29px !important; }
       .px-content { padding:22px 16px !important; }
       .px-images  { padding:0 16px 6px !important; }
       .px-actions { padding:14px 16px 4px !important; }
@@ -386,130 +445,119 @@ function build_html(array $mail): string {
     }
   </style>
 </head>
-<body style="margin:0;padding:0;width:100%;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f5f5f5;">
+<body style="margin:0;padding:0;width:100%;background:#f6f8f4;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f6f8f4;">
 <tr>
-<td class="px-card" align="center" style="padding:30px 10px 0;">
+<td class="px-card" align="center" style="padding:24px 10px;">
 
   <!--[if mso]>
   <table role="presentation" align="center" width="650" cellpadding="0" cellspacing="0" border="0"><tr><td>
   <![endif]-->
 
   <table role="presentation" class="email-container" align="center" width="100%" cellpadding="0" cellspacing="0" border="0"
-    style="width:100%;max-width:650px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    style="width:100%;max-width:650px;background:#ffffff;overflow:hidden;">
 
   <tr>
-    <td class="px-header" style="padding:30px 40px;">
-      <img src="{$logoUrl}" width="239" height="54" alt="{$fromName}" style="display:block;width:239px;height:54px;border:0;outline:none;text-decoration:none;" />
+    <td class="px-header" style="padding:20px 34px;background:#35dfb3;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="20%" align="left" class="px-nav-link" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;">
+            <a href="https://mariotstore.com/" style="color:#12342c;text-decoration:none;">Shop</a>
+          </td>
+          <td width="60%" align="center">
+            <a href="https://mariotstore.com/" style="display:inline-block;">
+              <img src="{$logoUrl}" width="190" alt="{$fromName}" style="display:block;width:190px;height:auto;max-width:100%;border:0;outline:none;text-decoration:none;" />
+            </a>
+          </td>
+          <td width="20%" align="right" class="px-nav-link" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;">
+            <a href="https://mariotstore.com/en/about" style="color:#12342c;text-decoration:none;">Discover</a>
+          </td>
+        </tr>
+      </table>
     </td>
   </tr>
 
   <tr>
-  <td>
-    <img
-      class="fluid-img"
-      src="{$heroImage}"
-      width="100%"
-      style="display:block;width:100%;max-width:100%;height:auto;"
-    />
+  <td class="px-title" align="center" style="padding:40px 50px 48px;background:#35dfb3;color:#122c25;">
+    <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:16px;letter-spacing:2px;text-transform:uppercase;">Mariot Store&nbsp; / &nbsp;Kitchen Edit</p>
+    <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:46px;line-height:1.08;font-weight:700;letter-spacing:-1.2px;color:#122c25;">{$headline}</h1>
   </td>
 </tr>
 
 <tr>
-  <td class="px-content content-text" style="padding:40px;">
-    <p class="body-text" style="font-size:14px;line-height:28px;color:#444;">
-      {$htmlMessage}
-    </p>
+  <td>{$heroImage}</td>
+</tr>
+
+<tr>
+  <td class="px-content content-text" style="padding:34px 38px 42px;background:#f6f8f4;">
+    <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:3px;color:#263d35;">MARIOT STORE&nbsp; / &nbsp;THE KITCHEN JOURNAL</p>
+    <h2 style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:21px;line-height:1.5;letter-spacing:3px;text-transform:uppercase;color:#172c27;">Notes from the kitchen</h2>
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.85;color:#454b48;">{$intro}</div>
   </td>
 </tr>
 
 <tr>
-  <td class="px-images" style="padding:0 20px 20px;">
+  <td class="px-images" style="padding:35px 34px 38px;background:#eeeeec;">
+    <h2 style="margin:0 0 24px;font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1.2;color:#242725;">Popular</h2>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
-      <tr class="stack-row">
+      <tr>
 
-        <td class="stack-col" width="33%" style="width:33%;">
-          <img class="fluid-img" src="{$image1}" width="100%"
-            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
+        <td class="popular-col" width="33%" style="width:33%;padding-right:10px;">
+          {$image1}
         </td>
 
-        <td class="spacer" width="2%" style="width:2%;font-size:0;line-height:0;"></td>
-
-        <td class="stack-col" width="33%" style="width:33%;">
-          <img class="fluid-img" src="{$image2}" width="100%"
-            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
+        <td class="popular-col" width="34%" style="width:34%;padding:0 5px;">
+          {$image2}
         </td>
 
-        <td class="spacer" width="2%" style="width:2%;font-size:0;line-height:0;"></td>
-
-        <td class="stack-col stack-col-last" width="33%" style="width:33%;">
-          <img class="fluid-img" src="{$image3}" width="100%"
-            style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;" />
+        <td class="popular-col popular-third" width="33%" style="width:33%;padding-left:10px;">
+          {$image3}
         </td>
 
       </tr>
     </table>
-
+    <div class="content-text" style="padding:22px 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.8;color:#414744;">{$popularCopy}</div>
   </td>
 </tr>
 
 <tr>
-  <td class="px-content content-text" style="padding:40px;">
-    <p class="body-text" style="font-size:14px;line-height:28px;color:#444;">
-      {$message2}
-    </p>
+  <td style="padding:36px 34px 6px;background:#1b4b42;">
+    <h2 style="margin:0 0 28px;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.2;color:#fff;">Inspirations</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      {$inspiration1}
+      {$inspiration2}
+    </table>
   </td>
 </tr>
 
 <tr>
-  <td class="px-actions" align="center" style="padding:20px 20px 10px;">
-
-    <a
-      class="btn"
-      href="https://mariotstore.com/"
-      style="
-        display:inline-block;
-        background:#000;
-        color:#fff;
-        text-decoration:none;
-        padding:14px 30px;
-        border-radius:30px;
-        margin-right:10px;
-        font-size:14px;
-      "
-    >
-      Visit Us
-    </a>
-
-    <a
-      class="btn"
-      href="https://mariotstore.com/en/about"
-      style="
-        display:inline-block;
-        background:#eaeaea;
-        color:#111;
-        text-decoration:none;
-        padding:14px 30px;
-        border-radius:30px;
-        font-size:14px;
-      "
-    >
-      About Us
-    </a>
-
+  <td style="padding:34px 24px 42px;background:#292929;">
+    <h2 style="margin:0 10px 26px;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.2;color:#fff;">Hotspots</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      {$hotspot1}
+      {$hotspot2}
+    </tr></table>
   </td>
 </tr>
 
   <tr>
-    <td class="px-social" align="center" style="padding:25px;">
-      {$socialLinks}
+    <td align="center" style="padding:24px 24px 8px;background:#f6f8f4;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.8;color:#555;">
+      <a href="{$unsubscribe}" style="color:#555;text-decoration:underline;">Unsubscribe</a> &nbsp;|&nbsp;
+      <a href="https://mariotstore.com/" style="color:#555;text-decoration:underline;">View online</a><br/>
+      You’re receiving this email from Mariot Store.
+    </td>
+  </tr>
+
+  <tr>
+    <td class="px-social" align="center" style="padding:24px 25px 16px;background:#f6f8f4;border-top:1px solid #9cb9ad;">
+        {$socialLinks}
   </td>
 </tr>
 
 <tr>
-  <td class="px-unsub" align="center" style="padding:0 20px 28px;">
-    <a class="unsub-btn" href="{$unsubscribe}" style="display:inline-block;background:#f4f4f4;border:1px solid #e3e3e3;color:#6d6d6d;text-decoration:none;padding:11px 26px;border-radius:30px;font-size:12px;">Unsubscribe</a>
+  <td align="center" style="padding:0 20px 30px;background:#f6f8f4;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7;color:#666;">
+    Professional kitchen equipment, selected by Mariot Store.
   </td>
 </tr>
 
@@ -752,13 +800,20 @@ function send_campaign(array $body): void {
   // as-is for the email body; the plain-text part is derived by stripping tags.
   $mail = array(
     'subject'   => isset($body['subject']) ? (string) $body['subject'] : '',
+    'headline'  => isset($body['headline']) ? (string) $body['headline'] : '',
     'html'      => $message,
-    'text'      => html_to_text($message),
+    'text'      => (isset($body['headline']) && $body['headline'] !== '' ? (string) $body['headline'] : 'The essentials of a better kitchen')
+      . "\n\n"
+      . html_to_text($message),
     'fromName'  => isset($body['fromName']) ? (string) $body['fromName'] : '',
     'heroImage' => isset($body['heroImage']) ? (string) $body['heroImage'] : '',
     'image1'    => isset($body['image1']) ? (string) $body['image1'] : '',
     'image2'    => isset($body['image2']) ? (string) $body['image2'] : '',
     'image3'    => isset($body['image3']) ? (string) $body['image3'] : '',
+    'image4'    => isset($body['image4']) ? (string) $body['image4'] : '',
+    'image5'    => isset($body['image5']) ? (string) $body['image5'] : '',
+    'image6'    => isset($body['image6']) ? (string) $body['image6'] : '',
+    'image7'    => isset($body['image7']) ? (string) $body['image7'] : '',
     'message2'  => isset($body['message2']) ? (string) $body['message2'] : '',
   );
 
