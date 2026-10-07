@@ -112,7 +112,6 @@ Two things to know:
   the address before removing it.
 
 
-  ................
 
 ### Images (Cloudinary)
 
