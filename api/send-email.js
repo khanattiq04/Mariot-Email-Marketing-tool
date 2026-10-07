@@ -348,7 +348,7 @@ function buildHtml(
     <h2 style="margin:0 10px 26px;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.2;color:#fff;">Hotspots</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
       ${hotspotStory(image6, "Hotspot product image 1", "PREP&nbsp; / &nbsp;PERFORMANCE", "A sharper start to every service", "Reliable prep essentials help your team work efficiently from the first order to the last.")}
-      ${hotspotStory(image7, "Hotspot product image 2", "SERVICE&nbsp; / &nbsp;STYLE", "Bring your best to the pass", "Explore practical, professional favourites selected for the demands of modern kitchens.")}
+      ${hotspotStory(image7, "Hotspot product image 2", "SERVICE&nbsp; / &nbsp;STYLE", "Bring your best to the pass", "Explore practical, professional selected for the demands of modern kitchens.")}
     </tr></table>
   </td>
 </tr>

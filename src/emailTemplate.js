@@ -183,7 +183,7 @@ export function buildEmailHtml({
     <h2 style="margin:0 10px 26px;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.2;color:#ffffff;">Hotspots</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
       ${hotspotCard({image:image6,label:"Hotspot product image 1",date:"PREP&nbsp; / &nbsp;PERFORMANCE",title:"A sharper start to every service",copy:"Reliable prep essentials help your team work efficiently from the first order to the last."})}
-      ${hotspotCard({image:image7,label:"Hotspot product image 2",date:"SERVICE&nbsp; / &nbsp;STYLE",title:"Bring your best to the pass",copy:"Explore practical, professional favourites selected for the demands of modern kitchens."})}
+      ${hotspotCard({image:image7,label:"Hotspot product image 2",date:"SERVICE&nbsp; / &nbsp;STYLE",title:"Bring your best to the pass",copy:"Explore practical, favourites selected for the demands of modern kitchens."})}
     </tr></table>
   </td></tr>
 

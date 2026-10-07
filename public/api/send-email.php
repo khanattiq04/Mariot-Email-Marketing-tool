@@ -359,7 +359,7 @@ function build_html(array $mail): string {
   $inspiration1 = inspiration_card($image4, 'Inspiration kitchen image 1', 'MARIOT KITCHEN NOTES', 'Made for the rhythm of service', 'Discover dependable professional equipment designed to keep busy kitchens moving, shift after shift.');
   $inspiration2 = inspiration_card($image5, 'Inspiration kitchen image 2', 'THE DETAILS THAT MATTER', 'Thoughtful tools. Better results.', 'From careful preparation to confident presentation, find the equipment that brings your kitchen together.');
   $hotspot1 = hotspot_card($image6, 'Hotspot product image 1', 'PREP&nbsp; / &nbsp;PERFORMANCE', 'A sharper start to every service', 'Reliable prep essentials help your team work efficiently from the first order to the last.');
-  $hotspot2 = hotspot_card($image7, 'Hotspot product image 2', 'SERVICE&nbsp; / &nbsp;STYLE', 'Bring your best to the pass', 'Explore practical, professional favourites selected for the demands of modern kitchens.');
+  $hotspot2 = hotspot_card($image7, 'Hotspot product image 2', 'SERVICE&nbsp; / &nbsp;STYLE', 'Bring your best to the pass', 'Explore practical, favourites selected for the demands of modern kitchens.');
   $socialLinks = social_links_html();
   $unsubscribe = unsubscribe_link(isset($mail['to']) ? (string) $mail['to'] : '');
 
