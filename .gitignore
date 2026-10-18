@@ -25,3 +25,7 @@ yarn-error.log*
 
 .vercel
 .env*.local
+
+# UAE email records (scraper)
+email-data/
+public/api/data/

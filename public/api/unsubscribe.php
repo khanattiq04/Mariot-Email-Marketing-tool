@@ -315,6 +315,14 @@ if (!is_email($email)) {
   );
 }
 
+// Stop the scraper/recipient picker from ever emailing this address again.
+try {
+  require_once __DIR__ . '/_records-lib.php';
+  rec_mark($email, 'unsubscribed');
+} catch (Throwable $err) {
+  error_log('[unsubscribe] could not mark ' . $email . ' in the email records: ' . $err->getMessage());
+}
+
 $name        = recipient_name($email);
 $requestedAt = gmdate('Y-m-d H:i') . ' UTC';
 $subject     = 'Unsubscribe request: ' . $email;

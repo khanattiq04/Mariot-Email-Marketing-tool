@@ -173,6 +173,13 @@ module.exports = async (req, res) => {
     );
   }
 
+  // Stop the scraper/recipient picker from ever emailing this address again.
+  try {
+    await require("./email-records").markRecord(email, "unsubscribed");
+  } catch (err) {
+    console.error("[unsubscribe] could not mark " + email + " in the email records:", err.message);
+  }
+
   const name = recipientName(email);
   const requestedAt = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
 

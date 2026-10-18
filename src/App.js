@@ -6,6 +6,8 @@ import { fetchSession, logout } from "./auth";
 import "./App.css";
 import { buildEmailHtml } from "./emailTemplate";
 import mariotIcon from "./mariot-icon.webp";
+import EmailScraper from "./EmailScraper";
+import { recordsPost, markRecord } from "./recordsApi";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -128,6 +130,8 @@ export default function App() {
   const [progress,      setProgress]      = useState({ done: 0, total: 0 });
   const [provider,      setProvider]      = useState("auto"); // "brevo" | "resend" | "mailersend" | "emailoctopus" | "auto"
   const [providerStats, setProviderStats] = useState({ brevo: 0, resend: 0, mailersend: 0, emailoctopus: 0 });
+  const [recipientMode, setRecipientMode] = useState("new"); // "new" | "old" | "random"
+  const [recordsVersion, setRecordsVersion] = useState(0);
 
   // "checking" until the session cookie has been verified server-side.
   const [session, setSession] = useState("checking"); // "checking" | "authed" | "anon"
@@ -215,10 +219,33 @@ export default function App() {
       .map((e) => e.trim())
       .filter((e) => e.includes("@"));
 
+  // Adds addresses to the recipient box, skipping ones already in it.
+  const appendEmails = (incoming) =>
+    setEmails((prev) => {
+      const current = prev.split(/[\n,;]+/).map((e) => e.trim()).filter((e) => e.includes("@"));
+      const seen = new Set(current.map((e) => e.toLowerCase()));
+      const added = incoming.filter((e) => !seen.has(e.toLowerCase()) && seen.add(e.toLowerCase()));
+      return [...current, ...added].join("\n");
+    });
+
   const handleSend = async () => {
-    const list = parseEmails();
+    let list = parseEmails();
     if (!list.length)               return toast.error("Add at least one valid email.");
     if (!subject || !message) return toast.error("Fill in all fields.");
+
+    // Skip unsubscribed addresses always, and already-emailed ones in "new" mode.
+    try {
+      const checked = await recordsPost("filter", { mode: recipientMode, emails: list });
+      const skipped = checked.skipped || [];
+      if (skipped.length) {
+        toast(`Skipping ${skipped.length} address(es): already emailed or unsubscribed.`, { icon: "⏭️" });
+        console.info("[records] skipped", skipped);
+      }
+      list = checked.allowed || list;
+      if (!list.length) return toast.error("Every address in the list was already emailed or unsubscribed.");
+    } catch (err) {
+      toast(`Could not check the email records (${err.message}). Sending to the list as it is.`, { icon: "⚠️" });
+    }
 
     const limit = PROVIDER_LIMITS[provider];
     if (list.length > limit) {
@@ -292,10 +319,12 @@ export default function App() {
         } else {
           addLog("✅ Sent to " + email + "  [" + icon + " " + usedProvider + "]" + reference + note, "success");
         }
+        markRecord(email, "sent");
         setProgress({ done: i + 1, total: list.length });
 
       } catch (err) {
         addLog(`❌ Failed: ${email} — ${err.message}`, "error");
+        markRecord(email, "failed", err.message);
       }
 
       if (i < list.length - 1) {
@@ -305,6 +334,7 @@ export default function App() {
     }
 
     setIsSending(false);
+    setRecordsVersion((v) => v + 1);
     if (!stopRef.current) {
       toast.success("Campaign complete!");
       addLog("🎉 Campaign finished.", "success");
@@ -455,6 +485,17 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* ── UAE email finder + records ── */}
+        <EmailScraper
+          limit={PROVIDER_LIMITS[provider]}
+          currentEmails={parseEmails()}
+          onAppend={appendEmails}
+          mode={recipientMode}
+          onModeChange={setRecipientMode}
+          disabled={isSending}
+          refreshKey={recordsVersion}
+        />
 
         {/* ── Recipient Emails ── */}
         <div className="card">

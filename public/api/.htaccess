@@ -12,6 +12,18 @@
   RewriteRule ^([A-Za-z0-9_-]+)/?$ $1.php [L,QSA]
 </IfModule>
 
+# Shared PHP includes (_records-lib.php) and the records folder are never served.
+<FilesMatch "^_">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+RedirectMatch 404 ^/api/data(/|$)
+
 # Never serve credentials: .env holds the provider API keys.
 <FilesMatch "^\.env">
   <IfModule mod_authz_core.c>

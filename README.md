@@ -141,6 +141,117 @@ The Popular gallery keeps all three images on desktop and shows its first two
 side by side on mobile. Template images scale to the available width while
 preserving their original proportions, so the complete image remains visible.
 
+### UAE email finder and email records
+
+The **UAE Email Finder & Records** card finds business emails for the UAE
+market, fills the recipient box with them and keeps a record of every address.
+
+- **Find new UAE emails** runs web searches (business type x emirate, e.g.
+  `restaurants Dubai UAE contact email`) one at a time, reads the result pages
+  and their `/contact` pages, and adds verified addresses until the recipient
+  box reaches the selected provider's daily limit (e.g. 483 for Auto, 300 for
+  Brevo). Leave "Business types" empty to search all UAE markets.
+- An address is kept only when it is on a `.ae` domain, or is printed within
+  a few lines of a UAE phone number (+971) or an emirate/city name. Addresses
+  on other countries' domains (`.in`, `.pk`, `.uk`...) are dropped.
+- Each address is checked for valid format, placeholder/junk patterns
+  (`noreply@`, `example.com`, image names, tracking ids), disposable and typo
+  domains, and a working mail server (MX record). `SCRAPER_SMTP_CHECK=1` also
+  asks the mail server whether the mailbox exists, where port 25 is open
+  (Hostinger shared hosting blocks it; the check is then skipped). No check
+  can promise 100% delivery - watch bounces in the provider dashboard.
+- Progress is remembered (`scrape-state.json`): each run continues with the
+  next queries/result pages and does not re-read a site for 30 days, so every
+  run finds new addresses.
+
+**Send campaign to** decides who is emailed:
+
+| Option | Load button | When sending |
+| --- | --- | --- |
+| New emails only | unused addresses, oldest found first | skips anyone emailed before |
+| Old emails | already-emailed addresses, least recent first | sends to the list as is |
+| Random | random mix of unused and emailed | sends to the list as is |
+
+Unsubscribed addresses are always skipped. After each send the address is
+marked `sent` (with a send count and date) or `failed`, and the Unsubscribe
+link marks it `unsubscribed`.
+
+**Records** live in `uae-email-records.csv` (opens in Excel; "Download Excel
+(CSV)" in the card exports it) with columns `email, status, domain, city,
+category, source_url, found_at, last_sent_at, send_count, last_error`.
+
+- PHP hosting: `email-data/` next to `.env`, one level above `public_html`
+  (created automatically; falls back to `public_html/api/data/`, blocked by
+  `.htaccess`). Override with `RECORDS_DIR`.
+- Local dev: `email-data/` in the project folder.
+- Vercel: `/tmp`, which is **not** permanent - use the PHP hosting for the list.
+
+| Variable | Purpose |
+| --- | --- |
+| `SERPER_API_KEY` | Optional. Google results from [serper.dev](https://serper.dev) instead of the free engines. |
+| `SERPAPI_API_KEY` | Optional alternative: [serpapi.com](https://serpapi.com). |
+| `SCRAPER_DAILY_SEARCHES` | Searches per engine per day (default 120). |
+| `SCRAPER_SMTP_CHECK` | `1` to also verify mailboxes over SMTP. |
+| `RECORDS_DIR` | Folder for the CSV and scrape state. |
+| `TOOL_API_KEY` / `REACT_APP_TOOL_API_KEY` | Optional shared key protecting `/api/email-records` (same value in both, then rebuild). |
+
+**Two ways to find emails** ("Where to find emails" in the card):
+
+- **⚡ UAE website list (default, fast).** No search engines are used, so
+  there is no waiting, no rest and nothing to block. On the first run the
+  tool downloads two free public lists of the world's most visited websites
+  ([Tranco](https://tranco-list.eu) and Cisco Umbrella, ~10 MB each, refreshed
+  monthly), keeps every UAE `.ae` domain (government `gov.ae`/`mil.ae`
+  excluded) and stores them in `uae-websites.json`. Each step then visits 40
+  of those websites at once - home page, then the contact page from the
+  site's own menu - and keeps their published addresses. A step takes about
+  10-20 seconds. The list keeps growing by itself: every `.ae` website that a
+  visited page links to (partners, clients, suppliers), and the website of
+  every `.ae` email address found, is added to the end of the list. When all
+  listed sites are visited, visited home pages are checked again only for
+  links to UAE websites not seen before. A website is never visited twice
+  and an email already in the records is never added again, so every run
+  finds only new addresses. Override the
+  sources with `SCRAPER_SITE_LISTS="name=https://...zip,name=https://...zip"`
+  (zip of a `rank,domain` CSV).
+- **🔎 Search engines (slower).** Searches by business type and emirate;
+  details below.
+
+**No API key is needed.** Without one, searches read the normal results pages
+of Bing, Yahoo and DuckDuckGo (google.com itself needs JavaScript and shows
+CAPTCHAs to servers, so it is not used).
+
+To avoid being blocked, the finder behaves like a patient person rather than a bot:
+
+- **Random pacing:** each engine waits a random 25-50 s between searches; the
+  page shows "next search in Ns" while it waits. Searches rotate between the
+  three engines.
+- **Daily cap:** at most `SCRAPER_DAILY_SEARCHES` searches per engine per day
+  (default 120, so ~360/day in total). Lower it if blocks still happen.
+- **Growing rest:** an engine that shows a captcha or answers 429/403 rests for
+  30 min, then 1 h, 2 h ... up to 24 h if it keeps refusing; one good search
+  resets it. When all three are resting the finder stops and says when to try
+  again - progress is kept.
+- **Fewer searches per email:** pages and search snippets are never fetched
+  twice (30-day memory), the site's real Contact/About links are followed, and
+  business directories (Yellow Pages UAE, UAE Contact, Connect.ae...) have
+  their company pages opened, so one search can yield many addresses.
+
+There is no way to make free searching *guaranteed* block-free. Engines decide
+on their side, and shared hosting IPs are shared with other sites. Rotating
+proxies or captcha-solving services are deliberately not used: they exist to
+get around the engines' protections and break their terms. If blocks keep
+happening, lower the daily cap, run the finder from your own PC (`npm run
+dev`), or set one of the optional API keys above. Engines also change their
+pages from time to time; if searches start returning 0 results, the link
+parsing in `rec_result_links()` / `resultLinks()` needs updating.
+
+On PHP hosting upload `build/api/email-records.php` and
+`build/api/_records-lib.php` with the other API files.
+
+Sending marketing email to scraped addresses: keep the Unsubscribe link,
+honour removals, and follow the UAE TDRA rules on unsolicited messages.
+
 ## Deploying
 
 The build is a static bundle, but sending needs a server, because the browser

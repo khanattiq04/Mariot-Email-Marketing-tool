@@ -21,7 +21,7 @@ test("renders the complete Mariot newsletter and all eight image fields", () => 
   expect(html).toContain(">Hotspots</h2>");
   expect(html).toContain("Made for the rhythm of service");
   expect(html).toContain("A sharper start to every service");
-  expect(html).toContain("professional favourites selected for the demands");
+  expect(html).toContain("favourites selected for the demands of modern kitchens");
   expect(html).toContain("You’re receiving this email from Mariot Store.");
   expect(html).toContain('href="https://mariotstore.com/"');
   expect(html.match(/href="https:\/\/mariotstore\.com\/en\/shop-by-brands"/g)).toHaveLength(2);
@@ -41,7 +41,8 @@ test("renders the complete Mariot newsletter and all eight image fields", () => 
   expect(html).not.toContain("object-fit:cover");
   expect(html).toContain('class="popular-col popular-third"');
   expect(html).toContain(".fluid-img.inspiration-image{max-width:480px!important");
-  expect(html).toContain(".fluid-img.inspiration-image,.image-placeholder.inspiration-image{max-width:100%!important}");
+  expect(html).toContain(".fluid-img.inspiration-image,.image-placeholder.inspiration-image,.fluid-img.hotspot-image,.image-placeholder.hotspot-image{width:50%!important;max-width:50%!important}");
+  expect(html).toContain(".fluid-img.inspiration-image,.image-placeholder.inspiration-image{max-width:50%!important}");
 });
 
 test("shows upload placeholders for empty image fields", () => {

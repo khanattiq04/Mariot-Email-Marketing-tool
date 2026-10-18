@@ -489,3 +489,32 @@ input[type="range"] { width: 100%; accent-color: #3182ce; }
   .preview-col { position: static; }
   .preview-frame { height: 65vh; min-height: 460px; }
 }
+
+/* ── UAE email finder & records ── */
+.record-stats {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center;
+  font-size: 0.85rem; color: #4a5568;
+  background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.8rem;
+}
+.record-stats strong { color: #1a202c; }
+.btn-export {
+  margin-left: auto; font-size: 0.82rem; font-weight: 600; color: #2b6cb0;
+  text-decoration: none; border: 1px solid #bee3f8; border-radius: 6px; padding: 4px 10px; background: white;
+}
+.btn-export:hover { background: #ebf8ff; }
+.scraper-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.btn-secondary {
+  padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #cbd5e0; background: white;
+  color: #2d3748; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+}
+.btn-secondary:hover:not(:disabled) { border-color: #3182ce; color: #2b6cb0; }
+.btn-secondary.primary { background: #3182ce; border-color: #3182ce; color: white; }
+.btn-secondary.primary:hover:not(:disabled) { background: #2b6cb0; color: white; }
+.btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-stop.small { padding: 0.6rem 1rem; font-size: 0.9rem; }
+.scraper-log { max-height: 220px; }
+.warn-hint { color: #c05621; }
+input[type="number"] {
+  width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;
+}
+.engine-status { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; margin-top: 0.35rem; color: #4a5568; }

@@ -99,6 +99,7 @@ export function buildEmailHtml({
     a{text-decoration:none}
     .email-container{width:100%!important;max-width:650px!important}
     .fluid-img{display:block!important;width:100%!important;max-width:100%!important;height:auto!important;object-fit:contain!important}
+    .fluid-img.inspiration-image,.image-placeholder.inspiration-image,.fluid-img.hotspot-image,.image-placeholder.hotspot-image{width:50%!important;max-width:50%!important}
     .fluid-img.inspiration-image{max-width:480px!important;margin-left:auto!important;margin-right:auto!important}
     .image-placeholder.inspiration-image{max-width:480px!important;margin-left:auto!important;margin-right:auto!important}
     .image-placeholder.lead-image{height:260px!important;line-height:260px!important}
@@ -108,7 +109,7 @@ export function buildEmailHtml({
     .content-text,.content-text *{font-family:Arial,Helvetica,sans-serif!important;word-wrap:break-word!important;overflow-wrap:break-word!important;word-break:break-word!important}
     @media only screen and (max-width:660px){
       .email-container{width:100%!important;max-width:100%!important}
-      .fluid-img.inspiration-image,.image-placeholder.inspiration-image{max-width:100%!important}
+      .fluid-img.inspiration-image,.image-placeholder.inspiration-image{max-width:50%!important}
       .px-header{padding:18px 20px!important}
       .px-title{padding:42px 24px 48px!important}
       .px-title h1{font-size:42px!important}
