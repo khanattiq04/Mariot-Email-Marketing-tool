@@ -4,10 +4,13 @@ import RichTextEditor from "./RichTextEditor";
 import Login from "./Login";
 import { fetchSession, logout } from "./auth";
 import "./App.css";
-import { buildEmailHtml } from "./emailTemplate";
+import emailTemplate from "./emailTemplate";
 import mariotIcon from "./mariot-icon.webp";
 import EmailScraper from "./EmailScraper";
 import { recordsPost, markRecord } from "./recordsApi";
+
+// emailTemplate.js is CommonJS so the Node sender can share it.
+const { buildEmailHtml } = emailTemplate;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -114,6 +117,16 @@ const PROVIDER_ICONS = {
   resend:     "🟠",
   mailersend: "🟢",
   emailoctopus: "🟣",
+};
+
+// The inbox preview loads the logo and icons from this site and shows grey
+// slots for images not uploaded yet; delivered emails never show those slots.
+const PREVIEW_ORIGIN = typeof window !== "undefined" && window.location ? window.location.origin : "";
+const PREVIEW_OPTIONS = {
+  preview: true,
+  logoUrl: `${PREVIEW_ORIGIN}/mariot-logo.png?v=4`,
+  iconBase: `${PREVIEW_ORIGIN}/icons`,
+  unsubscribeUrl: `${PREVIEW_ORIGIN}/api/unsubscribe?email=recipient%40example.com`,
 };
 
 // The sender name is fixed for the whole tool, so the field below is read-only.
@@ -367,7 +380,7 @@ export default function App() {
       image5: img5,
       image6: img6,
       image7: img7,
-    });
+    }, PREVIEW_OPTIONS);
   }, [previewKey]);
 
   if (session === "checking") {
@@ -718,7 +731,8 @@ export default function App() {
               <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
             </div>
             <div className="progress-text">
-              {progress.done} / {progress.total} sent ({pct}%)
+              <span className="live-value">{progress.done} / {progress.total}</span> sent (
+              <span className="live-value">{pct}%</span>)
             </div>
             {/* Live provider usage */}
             <div className="provider-usage">

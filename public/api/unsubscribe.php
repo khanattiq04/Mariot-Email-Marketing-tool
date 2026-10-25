@@ -294,7 +294,9 @@ if ($method === 'OPTIONS') {
   exit;
 }
 
-if ($method !== 'GET') {
+// GET = link clicked in the email; POST = one-click unsubscribe from the
+// mail app (RFC 8058, sent with List-Unsubscribe=One-Click).
+if ($method !== 'GET' && $method !== 'POST') {
   http_response_code(405);
   header('Content-Type: application/json; charset=utf-8');
   echo json_encode(array('error' => 'Method not allowed'));

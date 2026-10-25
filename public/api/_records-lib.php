@@ -32,7 +32,7 @@ if (!function_exists('env_value')) {
 
 const REC_COLUMNS = array(
   'email', 'status', 'domain', 'city', 'category', 'source_url',
-  'found_at', 'last_sent_at', 'send_count', 'last_error',
+  'found_at', 'last_sent_at', 'send_count', 'last_error', 'business_type',
 );
 
 // Statuses: new (found, never emailed), sent, failed, unsubscribed, invalid.
@@ -93,7 +93,7 @@ const REC_JUNK_LOCALS = array(
   'noreply', 'no-reply', 'no_reply', 'donotreply', 'do-not-reply', 'mailer-daemon',
   'postmaster', 'abuse', 'hostmaster', 'example', 'test', 'user', 'username',
   'name', 'email', 'youremail', 'your.email', 'yourname', 'your-email', 'john.doe',
-  'johndoe', 'jane.doe', 'firstname.lastname', 'firstname', 'someone', 'xxx',
+  'johndoe', 'jane.doe', 'firstname.lastname', 'firstname', 'someone', 'xxx', 'xyz', 'abc', 'demo', 'sample',
 );
 
 const REC_FILE_EXTENSIONS = array(
@@ -250,12 +250,160 @@ function rec_save_state(array $state): void {
 }
 
 function rec_stats(array $records): array {
-  $stats = array('total' => count($records), 'new' => 0, 'sent' => 0, 'failed' => 0, 'unsubscribed' => 0, 'invalid' => 0);
+  $stats = array('total' => count($records), 'new' => 0, 'sent' => 0, 'failed' => 0, 'unsubscribed' => 0, 'invalid' => 0,
+                 'types' => array(), 'unsorted' => 0);
+  foreach (array_keys(rec_business_types()) as $key) $stats['types'][$key] = array('total' => 0, 'new' => 0);
   foreach ($records as $record) {
     $status = $record['status'];
     if (isset($stats[$status])) $stats[$status]++;
+    $type = rec_record_type($record);
+    if ($type === '') {
+      $stats['unsorted']++;
+    } else {
+      $stats['types'][$type]['total']++;
+      if ($status === 'new') $stats['types'][$type]['new']++;
+    }
   }
   return $stats;
+}
+
+// ------------------------------------------------------- business types --
+//
+// Every email is filed under the kind of business whose website it came from,
+// so a campaign can go to restaurants only, or schools only.
+
+function rec_business_types(): array {
+  static $types = null;
+  if ($types !== null) return $types;
+  $types = array(
+    'restaurant' => array(
+      'label' => 'Restaurants & cafés',
+      'keywords' => array('restaurants', 'cafes', 'coffee shops', 'bakeries', 'cloud kitchens', 'juice bars', 'sweets shops',
+                          'fast food restaurants', 'shawarma restaurants'),
+      'rules' => array(array('/\\brestaurants?\\b/u', 1), array('/\\bcaf(?:e|é)s?\\b/u', 1), array('/\\bcoffee\\b/', 0.8),
+                       array('/\\bbistro/', 1), array('/\\bgrill\\b/', 0.8), array('/\\beatery\\b/', 1), array('/\\bcuisine\\b/', 0.8),
+                       array('/\\bmenu\\b/', 0.6), array('/\\bbaker(?:y|ies)\\b/', 1), array('/\\bpizza/', 1), array('/\\bburgers?\\b/', 1),
+                       array('/\\bshawarma/', 1), array('/\\bsweets\\b/', 0.8), array('/\\bjuices?\\b/', 0.6),
+                       array('/\\bdin(?:e|ing)\\b/', 0.6), array('/\\bdelivery\\b/', 0.3), array('/\\bfood\\b/', 0.3)),
+    ),
+    'hotel' => array(
+      'label' => 'Hotels',
+      'keywords' => array('hotels', 'hotel apartments', 'resorts', 'serviced apartments'),
+      'rules' => array(array('/\\bhotels?\\b/', 1), array('/\\bresorts?\\b/', 1), array('/\\bhotel apartments?\\b/', 1.5),
+                       array('/\\bsuites?\\b/', 0.5), array('/\\bhostels?\\b/', 1), array('/\\baccommodation/', 0.8),
+                       array('/\\bbook (?:your|a) (?:room|stay)\\b/', 1), array('/\\bcheck-?in\\b/', 0.4)),
+    ),
+    'catering' => array(
+      'label' => 'Catering',
+      'keywords' => array('catering companies', 'event catering', 'food catering services', 'corporate catering'),
+      'rules' => array(array('/\\bcater(?:ing|er|ers)\\b/', 1.6), array('/\\bbanquets?\\b/', 0.8),
+                       array('/\\bmeal (?:plans?|boxes)\\b/', 0.8), array('/\\bcanteen/', 0.8), array('/\\bfood services?\\b/', 0.8)),
+    ),
+    'services' => array(
+      'label' => 'Services',
+      'keywords' => array('facility management companies', 'cleaning companies', 'maintenance companies', 'logistics companies',
+                          'law firms', 'accounting firms', 'digital marketing agencies', 'IT companies', 'real estate companies',
+                          'contracting companies', 'recruitment agencies', 'pest control companies', 'car rental companies',
+                          'travel agencies', 'business setup consultants', 'event management companies', 'insurance companies'),
+      'rules' => array(array('/\\bconsult(?:ing|ancy|ants?)\\b/', 1), array('/\\bmaintenance\\b/', 1), array('/\\bcleaning\\b/', 1),
+                       array('/\\bcontracting\\b/', 1), array('/\\blogistics\\b/', 1), array('/\\bfreight\\b/', 1),
+                       array('/\\bshipping\\b/', 0.6), array('/\\blaw firm|\\badvocates\\b|\\blegal consult/', 1.2),
+                       array('/\\baccounting\\b|\\bauditing\\b|\\bbookkeeping\\b/', 1),
+                       array('/\\bmarketing agency|\\bdigital marketing\\b|\\badvertising\\b/', 1),
+                       array('/\\bit solutions\\b|\\bsoftware\\b|\\bweb development\\b/', 1), array('/\\breal estate\\b|\\bproperties\\b/', 1),
+                       array('/\\bconstruction\\b/', 0.8), array('/\\bengineering\\b/', 0.6), array('/\\binsurance\\b/', 1),
+                       array('/\\brecruitment\\b|\\bmanpower\\b/', 1), array('/\\bfacility management\\b/', 1.2),
+                       array('/\\bpest control\\b/', 1.2), array('/\\blaundry\\b/', 1), array('/\\bcar rental\\b|\\brent a car\\b/', 1.2),
+                       array('/\\btravel\\b|\\btourism\\b/', 0.8), array('/\\bsecurity services\\b/', 1), array('/\\bprinting\\b/', 0.8),
+                       array('/\\bbusiness setup\\b/', 1.2), array('/\\bevent management\\b/', 1), array('/\\bservices\\b/', 0.25)),
+    ),
+    'school' => array(
+      'label' => 'Schools & education',
+      'keywords' => array('schools', 'nurseries', 'training institutes', 'universities', 'academies', 'kindergartens'),
+      'rules' => array(array('/\\bschools?\\b/', 1.2), array('/\\bacadem(?:y|ies)\\b/', 1), array('/\\bnurser(?:y|ies)\\b/', 1),
+                       array('/\\bkindergarten/', 1.2), array('/\\buniversity\\b/', 1.2), array('/\\bcollege\\b/', 1),
+                       array('/\\binstitute\\b/', 0.8), array('/\\btraining (?:centre|center|institute)/', 1.2),
+                       array('/\\bcurriculum\\b/', 1), array('/\\badmissions?\\b/', 1), array('/\\bstudents?\\b/', 0.5),
+                       array('/\\beducation(?:al)?\\b/', 0.8)),
+    ),
+    'other' => array(
+      'label' => 'Others',
+      'keywords' => array('supermarkets', 'general trading companies', 'hospitals', 'clinics', 'pharmacies', 'furniture stores',
+                          'electronics stores', 'jewellery shops', 'perfume shops', 'fashion boutiques', 'car dealers',
+                          'auto repair garages', 'beauty salons', 'gyms', 'food trading companies', 'industrial suppliers',
+                          'packaging companies', 'food manufacturers'),
+      'rules' => array(),
+    ),
+  );
+  return $types;
+}
+
+/** Selected types, or null for "every type". */
+function rec_clean_types($value): ?array {
+  if (!is_array($value)) return null;
+  $keys = array_keys(rec_business_types());
+  $wanted = array_values(array_intersect($keys, array_map('strval', $value)));
+  return $wanted && count($wanted) < count($keys) ? $wanted : null;
+}
+
+/** Which kind of business a web page belongs to. */
+function rec_classify_page(string $html, string $host): string {
+  $pick = function (string $re) use ($html): string {
+    return preg_match($re, $html, $m) ? html_entity_decode(strip_tags($m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8') : '';
+  };
+  $title = $pick('#<title[^>]*>(.*?)</title>#is');
+  $desc = $pick('#<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']*)#i') . ' '
+        . $pick('#<meta[^>]+property=["\']og:(?:site_name|title|description)["\'][^>]+content=["\']([^"\']*)#i');
+  $heads = '';
+  if (preg_match_all('#<h[12][^>]*>(.*?)</h[12]>#is', $html, $hm)) {
+    $heads = implode(' ', array_map('strip_tags', array_slice($hm[1], 0, 12)));
+  }
+  $domain = preg_replace('/^www\./', '', strtolower($host));
+  $domain = preg_replace('/\.(?:co|com|net|org)?\.?ae$|\.[a-z]+$/', '', $domain);
+  $domain = str_replace(array('-', '_', '.'), ' ', $domain);
+  $body = mb_substr(rec_page_text($html), 0, 15000);
+  $parts = array(array($title, 4), array($desc, 3), array($heads, 2), array($domain, 3), array($body, 1));
+  foreach ($parts as $i => $part) $parts[$i][0] = mb_strtolower($part[0]);
+
+  $scores = array();
+  foreach (rec_business_types() as $type => $def) {
+    $score = 0.0;
+    foreach ($def['rules'] as $rule) {
+      foreach ($parts as $part) {
+        $hits = preg_match_all($rule[0], $part[0]);
+        $score += min((int) $hits, $part[1] === 1 ? 5 : 2) * $part[1] * $rule[1];
+      }
+    }
+    $scores[$type] = $score;
+  }
+  arsort($scores);
+  $best = key($scores);
+  if ($scores[$best] < 4) return 'other';
+  // A caterer's site also talks about food and menus: catering wins when it is prominent.
+  if ($best === 'restaurant' && $scores['catering'] >= 4 && $scores['catering'] >= 0.5 * $scores['restaurant']) return 'catering';
+  return $best;
+}
+
+/** Type of a search keyword ("restaurants" -> restaurant). */
+function rec_type_of_keyword(string $keyword): string {
+  $k = strtolower(trim($keyword));
+  if ($k === '') return '';
+  foreach (rec_business_types() as $type => $def) {
+    foreach ($def['keywords'] as $w) if (strtolower($w) === $k) return $type;
+  }
+  foreach (rec_business_types() as $type => $def) {
+    foreach ($def['rules'] as $rule) if (preg_match($rule[0], $k)) return $type;
+  }
+  return 'other';
+}
+
+/** A record's business type ('' = not sorted yet). */
+function rec_record_type(array $record): string {
+  $type = (string) ($record['business_type'] ?? '');
+  if ($type !== '' && isset(rec_business_types()[$type])) return $type;
+  $category = trim((string) ($record['category'] ?? ''));
+  if ($category !== '' && $category !== 'UAE website' && $category !== 'manual') return rec_type_of_keyword($category);
+  return '';
 }
 
 /** Marks one address after a send attempt, creating the record for hand-pasted addresses. */
@@ -911,7 +1059,11 @@ function rec_scrape_step(array $body): array {
 
 
   $need = max(1, min(2500, (int) ($body['need'] ?? 50)));
+  $types = rec_clean_types($body['types'] ?? null);
   $keywords = rec_clean_list($body['keywords'] ?? array(), 200);
+  if (!$keywords && $types) {
+    foreach ($types as $type) $keywords = array_merge($keywords, rec_business_types()[$type]['keywords']);
+  }
   $cities = rec_clean_list($body['cities'] ?? array(), 20);
   $queries = rec_queries($keywords, $cities);
 
@@ -988,6 +1140,8 @@ function rec_scrape_step(array $body): array {
   }
 
   $pages = rec_fetch_pages(array_values($fetch));
+  $pageTypes = array();     // host => business type of its home/result page
+  foreach ($pages as $url => $html) $pageTypes[rec_host($url)] = rec_classify_page($html, rec_host($url));
   $followUps = array();
   $directoryPages = 0;
   foreach ($pages as $url => $html) {
@@ -1047,7 +1201,8 @@ function rec_scrape_step(array $body): array {
   }
   if ($rejected) $log[] = $rejected . ' rejected: domain has no working mail server' . ($smtp ? ' or mailbox does not exist' : '');
 
-  $added = rec_locked(function () use ($verified, $query, $fetch) {
+  $typeOf = array();
+  $added = rec_locked(function () use ($verified, $query, $fetch, $pageTypes, &$typeOf) {
     $records = rec_load();
     $added = array();
     foreach ($verified as $email => $source) {
@@ -1056,8 +1211,14 @@ function rec_scrape_step(array $body): array {
       $record['city'] = $query['city'];
       $record['category'] = $query['category'];
       $record['source_url'] = $source;
+      // A directory page lists many kinds of business: trust the search keyword there.
+      $host = rec_host($source);
+      $siteType = $pageTypes[$host] ?? '';
+      $record['business_type'] = ($siteType !== '' && $siteType !== 'other' && !rec_host_matches($host, REC_DIRECTORY_HOSTS))
+        ? $siteType : rec_type_of_keyword($query['category']);
       $records[$email] = $record;
       $added[] = $email;
+      $typeOf[$email] = $record['business_type'];
     }
     if ($added) rec_save($records);
 
@@ -1069,13 +1230,19 @@ function rec_scrape_step(array $body): array {
   });
 
   $log[] = count($added) . ' verified new UAE emails saved to records';
+  $wanted = $types ? array_values(array_filter($added, function ($e) use ($types, $typeOf) {
+    return in_array($typeOf[$e] ?? '', $types, true);
+  })) : $added;
+  if ($types && count($wanted) < count($added)) {
+    $log[] = (count($added) - count($wanted)) . ' of them are other kinds of business - kept in records for later';
+  }
 
   return array(
     'exhausted' => false,
     'query'     => $query['q'],
     'page'      => $pick['page'],
-    'added'     => count($added),
-    'emails'    => array_slice($added, 0, $need),
+    'added'     => count($wanted),
+    'emails'    => array_slice($wanted, 0, $need),
     'log'       => $log,
   );
 }
@@ -1083,7 +1250,7 @@ function rec_scrape_step(array $body): array {
 // ------------------------------------------------------------ recipients --
 
 /** Picks recipients from the records. mode: new | old | random */
-function rec_pick(string $mode, int $count, array $exclude): array {
+function rec_pick(string $mode, int $count, array $exclude, ?array $types = null): array {
   $records = rec_load();
   $skip = array();
   foreach ($exclude as $email) $skip[strtolower(trim((string) $email))] = true;
@@ -1091,6 +1258,7 @@ function rec_pick(string $mode, int $count, array $exclude): array {
   $pool = array();
   foreach ($records as $email => $record) {
     if (isset($skip[$email])) continue;
+    if ($types && !in_array(rec_record_type($record), $types, true)) continue;
     $status = $record['status'];
     if ($mode === 'new' && $status === 'new') $pool[] = $record;
     elseif ($mode === 'old' && $status === 'sent') $pool[] = $record;
@@ -1296,6 +1464,38 @@ function rec_prepare_sites(): array {
   return array('ready' => rec_sites_ready($sites), 'log' => $log);
 }
 
+/** .ae websites a page links to (other than itself). */
+function rec_discover_ae_sites(string $html, string $pageHost): array {
+  $own = rec_ae_domain($pageHost);
+  $out = array();
+  if (preg_match_all('#https?://([a-z0-9.-]+\.ae)(?=[/:"\'?\s#]|$)#i', $html, $m)) {
+    foreach ($m[1] as $host) {
+      $domain = rec_ae_domain($host);
+      if ($domain !== null && $domain !== $own) $out[$domain] = true;
+      if (count($out) >= 40) break;
+    }
+  }
+  return array_keys($out);
+}
+
+/** Appends never-seen domains to the website list. @return int how many were added */
+function rec_add_sites(array $domains): int {
+  if (!$domains) return 0;
+  return rec_locked(function () use ($domains) {
+    $sites = rec_load_sites();
+    $state = rec_load_state();
+    $added = 0;
+    foreach ($domains as $domain) {
+      if (isset($sites['domains'][$domain]) || isset($state['crawled'][$domain]) || isset($state['crawled']['www.' . $domain])) continue;
+      $sites['domains'][$domain] = 900000000 + $added; // after the ranked sites
+      $sites['list'][] = $domain;
+      $added++;
+    }
+    if ($added) rec_save_sites($sites);
+    return $added;
+  });
+}
+
 function rec_detect_city(string $text): string {
   foreach (REC_UAE_CITIES as $city) {
     if (stripos($text, $city) !== false) return $city;
@@ -1311,6 +1511,7 @@ function rec_crawl_step(array $body): array {
   $started = microtime(true);
   @set_time_limit(90);
   $need = max(1, min(2500, (int) ($body['need'] ?? 50)));
+  $types = rec_clean_types($body['types'] ?? null);
 
   $batch = rec_locked(function () {
     $sites = rec_load_sites();
@@ -1324,14 +1525,40 @@ function rec_crawl_step(array $body): array {
 
   if ($batch === null) return array('needsPrepare' => true, 'emails' => array(), 'added' => 0, 'log' => array());
   if (!$batch['domains']) {
+    // Every listed website was visited: look at visited websites again only
+    // for links to UAE websites not seen yet, which refills the list.
+    $again = rec_locked(function () {
+      $sites = rec_load_sites();
+      $from = (int) ($sites['discover_cursor'] ?? 0);
+      $domains = array_slice($sites['list'], $from, REC_SITE_BATCH);
+      $sites['discover_cursor'] = $from + count($domains);
+      rec_save_sites($sites);
+      return $domains;
+    });
+    if ($again) {
+      $found = array();
+      $urls = array_map(function ($d) { return 'https://' . $d . '/'; }, $again);
+      foreach (rec_fetch_pages($urls, 8) as $url => $html) {
+        foreach (rec_discover_ae_sites($html, rec_host($url)) as $domain) $found[$domain] = true;
+      }
+      $grown = rec_add_sites(array_keys($found));
+      return array('exhausted' => false, 'emails' => array(), 'added' => 0, 'log' => array(
+        'All listed websites visited - checked ' . count($again) . ' of them for links to more UAE websites: ' . $grown . ' new websites added',
+      ));
+    }
     return array('exhausted' => true, 'emails' => array(), 'added' => 0, 'log' => array(
       'Every website in the UAE list has been visited. The list refreshes monthly; meanwhile use "Search engines" mode.',
     ));
   }
 
-  $candidates = array(); // email => [source url, city]
-  $consider = function (string $html, string $url) use (&$candidates) {
+  $candidates = array(); // email => [source url, city, business type]
+  $discovered = array(); // new .ae websites linked from the pages visited
+  $siteTypes = array();  // site => business type, from its home page
+  $consider = function (string $html, string $url) use (&$candidates, &$discovered, &$siteTypes) {
     $host = rec_host($url);
+    $site = rec_ae_domain($host) ?? $host;
+    if (!isset($siteTypes[$site])) $siteTypes[$site] = rec_classify_page($html, $host);
+    foreach (rec_discover_ae_sites($html, $host) as $domain) $discovered[$domain] = true;
     $text = rec_deobfuscate(rec_page_text($html));
     $city = rec_detect_city($text);
     foreach (rec_extract($html, $text) as $email) {
@@ -1342,7 +1569,7 @@ function rec_crawl_step(array $body): array {
       $uae = rec_ends_with($host, '.ae')
         ? (strlen($tld) !== 2 || in_array($tld, REC_GENERIC_CC, true))
         : rec_is_uae($email, $text, $host);
-      if ($uae) $candidates[$email] = array($url, $city);
+      if ($uae) $candidates[$email] = array($url, $city, $siteTypes[$site]);
     }
   };
 
@@ -1372,12 +1599,31 @@ function rec_crawl_step(array $body): array {
   }
 
   $log = array('Visited ' . count($batch['domains']) . ' UAE websites (' . count($pages) . ' answered, ' . $batch['left'] . ' left in the list)');
+  // Websites the visited pages link to, and .ae email domains, join the list,
+  // so it keeps growing and every run reaches websites never visited before.
+  foreach (array_keys($candidates) as $email) {
+    $domain = rec_ae_domain(substr((string) strrchr($email, '@'), 1));
+    if ($domain !== null) $discovered[$domain] = true;
+  }
+  $grown = rec_add_sites(array_keys($discovered));
+  if ($grown) $log[] = $grown . ' new UAE websites discovered and added to the list';
+
   $added = rec_verify_and_save($candidates, 'UAE website', $batch['domains'], $started, $log);
+  $wanted = $types ? array_values(array_filter($added, function ($e) use ($types, $candidates) {
+    return in_array($candidates[$e][2], $types, true);
+  })) : $added;
+  if ($types && $added) {
+    $counts = array();
+    foreach ($added as $e) $counts[$candidates[$e][2]] = ($counts[$candidates[$e][2]] ?? 0) + 1;
+    $parts = array();
+    foreach ($counts as $t => $n) $parts[] = $n . ' ' . strtolower(rec_business_types()[$t]['label']);
+    $log[] = 'By type: ' . implode(', ', $parts) . ' - ' . count($wanted) . ' match your selection, the rest are kept in records';
+  }
 
   return array(
     'exhausted' => false,
-    'added'     => count($added),
-    'emails'    => array_slice($added, 0, $need),
+    'added'     => count($wanted),
+    'emails'    => array_slice($wanted, 0, $need),
     'log'       => $log,
   );
 }
@@ -1411,6 +1657,7 @@ function rec_verify_and_save(array $candidates, string $category, array $hosts, 
       $record['city'] = $meta[1];
       $record['category'] = $category;
       $record['source_url'] = $meta[0];
+      $record['business_type'] = (string) ($meta[2] ?? '');
       $records[$email] = $record;
       $added[] = $email;
     }
@@ -1422,4 +1669,45 @@ function rec_verify_and_save(array $candidates, string $category, array $hosts, 
   });
   $log[] = count($added) . ' verified new UAE emails saved to records';
   return $added;
+}
+
+
+/**
+ * Sorts emails saved before business types existed: visits the websites they
+ * came from (40 at a time) and files every email from that site under its type.
+ */
+function rec_classify_step(): array {
+  @set_time_limit(90);
+  $records = rec_locked(function () { return rec_load(); });
+  $bySite = array();
+  foreach ($records as $email => $record) {
+    if (rec_record_type($record) !== '') continue;
+    $source = preg_match('#^https?:#', $record['source_url']) ? $record['source_url'] : 'https://' . $record['domain'] . '/';
+    $site = rec_host($source);
+    if ($site === '') continue;
+    $bySite[$site][] = $email;
+  }
+  $sites = array_slice(array_keys($bySite), 0, REC_SITE_BATCH);
+  if (!$sites) return array('done' => true, 'sorted' => 0, 'left' => 0, 'log' => array('Every saved email is sorted by business type.'));
+  $urls = array_map(function ($s) { return 'https://' . $s . '/'; }, $sites);
+  $types = array();
+  foreach (rec_fetch_pages($urls, 8) as $url => $html) $types[rec_host($url)] = rec_classify_page($html, rec_host($url));
+  $sorted = rec_locked(function () use ($sites, $bySite, $types) {
+    $fresh = rec_load();
+    $sorted = 0;
+    foreach ($sites as $site) {
+      $type = $types[$site] ?? 'other';     // a site that no longer answers is filed under Others
+      foreach ($bySite[$site] as $email) {
+        if (isset($fresh[$email]) && rec_record_type($fresh[$email]) === '') {
+          $fresh[$email]['business_type'] = $type;
+          $sorted++;
+        }
+      }
+    }
+    rec_save($fresh);
+    return $sorted;
+  });
+  $left = count($bySite) - count($sites);
+  return array('done' => $left === 0, 'sorted' => $sorted, 'left' => $left,
+               'log' => array('Sorted ' . $sorted . ' saved emails from ' . count($sites) . ' websites (' . $left . ' websites left)'));
 }

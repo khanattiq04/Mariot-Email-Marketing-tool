@@ -15,6 +15,14 @@ const ENGINE_LABELS = { bing: "Bing", yahoo: "Yahoo", duckduckgo: "DuckDuckGo" }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Kinds of business an email can be filed under (labels come from the server).
+const TYPE_ORDER = ["restaurant", "hotel", "catering", "services", "school", "other"];
+const TYPE_ICONS = { restaurant: "🍽️", hotel: "🏨", catering: "🥘", services: "🛠️", school: "🎓", other: "🏢" };
+const DEFAULT_TYPE_LABELS = {
+  restaurant: "Restaurants & cafés", hotel: "Hotels", catering: "Catering",
+  services: "Services", school: "Schools & education", other: "Others",
+};
+
 /**
  * UAE email scraper + recipient source.
  *
@@ -34,6 +42,9 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
   const [keywords, setKeywords] = useState("");
   const [source, setSource] = useState("sites"); // "sites" (website list) | "search" (search engines)
   const [sites, setSites] = useState(null);
+  const [typeLabels, setTypeLabels] = useState(DEFAULT_TYPE_LABELS);
+  const [types, setTypes] = useState(TYPE_ORDER);          // selected business types (all = no filter)
+  const [sorting, setSorting] = useState(false);
   const [target, setTarget] = useState("");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ found: 0, target: 0, steps: 0 });
@@ -50,6 +61,7 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
         setSearchProvider(data.searchProvider || "");
         setEngines(data.engines || null);
         setSites(data.sites || null);
+        if (data.businessTypes) setTypeLabels({ ...DEFAULT_TYPE_LABELS, ...data.businessTypes });
         setStatsError("");
       })
       .catch((err) => setStatsError(err.message));
@@ -76,11 +88,12 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
     let errors = 0;
     const seen = new Set(currentEmails.map((e) => e.toLowerCase()));
     const action = source === "sites" ? "crawl" : "scrape";
-    const emptyLimit = source === "sites" ? 60 : MAX_EMPTY_STEPS;
+    // With a business-type filter many batches hold none of the chosen types: allow more of them.
+    const emptyLimit = source === "sites" ? (types.length === TYPE_ORDER.length ? 60 : 150) : MAX_EMPTY_STEPS;
 
     while (found < effectiveTarget && steps < MAX_STEPS && !stopRef.current) {
       try {
-        const data = await recordsPost(action, { need: effectiveTarget - found, keywords });
+        const data = await recordsPost(action, { need: effectiveTarget - found, keywords, types });
         errors = 0;
         if (data.sites) setSites(data.sites);
 
@@ -152,12 +165,14 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
   const handleLoad = async () => {
     if (room <= 0) return toast.error(`The recipient box is full (${limit} for this provider).`);
     try {
-      const data = await recordsPost("load", { mode, count: room, exclude: currentEmails });
+      const data = await recordsPost("load", { mode, count: room, exclude: currentEmails, types });
       const emails = data.emails || [];
       if (data.stats) setStats(data.stats);
       if (!emails.length) {
         return toast.error(
-          mode === "old" ? "No previously emailed addresses on record yet." : "No unused emails on record - scrape new ones first."
+          mode === "old"
+            ? `No previously emailed ${typeSummary} on record yet.`
+            : `No unused ${typeSummary} emails on record - find new ones first.`
         );
       }
       onAppend(emails);
@@ -167,6 +182,33 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
       }
     } catch (err) {
       toast.error(err.message);
+    }
+  };
+
+  const allTypes = types.length === TYPE_ORDER.length;
+  const typeSummary = allTypes ? "" : types.map((t) => typeLabels[t].toLowerCase()).join(", ");
+
+  const toggleType = (type) =>
+    setTypes((prev) => {
+      const next = prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type];
+      return next.length ? TYPE_ORDER.filter((t) => next.includes(t)) : prev;   // keep at least one
+    });
+
+  // Emails saved before business types existed: visit their websites once to sort them.
+  const handleSort = async () => {
+    setSorting(true);
+    try {
+      for (let i = 0; i < 200; i++) {
+        const data = await recordsPost("classify");
+        if (data.stats) setStats(data.stats);
+        (data.log || []).forEach((line) => addLog(line));
+        if (data.done) break;
+      }
+      toast.success("Saved emails are sorted by business type.");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSorting(false);
     }
   };
 
@@ -215,9 +257,51 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
         Unsubscribed addresses are always skipped.
       </p>
 
+      <label>Business type</label>
+      <div className="type-grid" role="group" aria-label="Business types">
+        <button
+          type="button"
+          className={`type-chip all ${allTypes ? "active" : ""}`}
+          disabled={running}
+          onClick={() => setTypes(TYPE_ORDER)}
+        >
+          All types
+        </button>
+        {TYPE_ORDER.map((type) => {
+          const count = stats && stats.types && stats.types[type];
+          const on = types.includes(type) && !allTypes;
+          return (
+            <label key={type} className={`type-chip ${on ? "active" : ""}`}>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={running}
+                onChange={() => (allTypes ? setTypes([type]) : toggleType(type))}
+              />
+              <span>{TYPE_ICONS[type]} {typeLabels[type]}</span>
+              {count ? <span className="type-count live-value">{count.new}</span> : null}
+            </label>
+          );
+        })}
+      </div>
+      <p className="field-hint">
+        {allTypes
+          ? "Every kind of business. Pick one or more types to find and load only those."
+          : `Only ${typeSummary} will be found and loaded. Emails of other types found on the way are still saved for later.`}
+        {" "}Numbers show unused emails of each type.
+        {stats && stats.unsorted > 0 && (
+          <>
+            {" "}
+            <button type="button" className="link-btn" onClick={handleSort} disabled={sorting || running}>
+              {sorting ? "Sorting saved emails..." : `Sort ${stats.unsorted} older saved emails by type`}
+            </button>
+          </>
+        )}
+      </p>
+
       <div className="scraper-row">
         <button type="button" className="btn-secondary" onClick={handleLoad} disabled={disabled || running || room <= 0}>
-          📂 Load {mode} emails from records ({room})
+          📂 Load {mode} {allTypes ? "" : typeSummary + " "}emails from records ({room})
         </button>
       </div>
 
@@ -260,7 +344,9 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
           <textarea
             id="scrape-keywords"
             rows={2}
-            placeholder="Leave empty to search all UAE markets, or e.g. restaurants, hotels, catering companies"
+            placeholder={allTypes
+              ? "Leave empty to search all UAE markets, or e.g. restaurants, hotels, catering companies"
+              : `Leave empty to search for the selected types (${typeSummary})`}
             value={keywords}
             disabled={running}
             onChange={(e) => setKeywords(e.target.value)}
@@ -269,7 +355,8 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
       )}
 
       <label htmlFor="scrape-target">
-        How many to find (space left for this provider: <strong>{room}</strong> of {limit})
+        How many to find (space left for this provider: <span className="live-value">{room}</span> of{" "}
+        <span className="live-value">{limit}</span>)
       </label>
       <input
         id="scrape-target"
@@ -291,7 +378,7 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
             <span className="engine-status">
               {Object.entries(engines).map(([name, e]) => (
                 <span key={name}>
-                  {ENGINE_LABELS[name] || name}: {e.today}/{e.limit} today
+                  {ENGINE_LABELS[name] || name}: <span className="live-value">{e.today} / {e.limit}</span> today
                   {e.restingFor > 0 ? ` · resting ${Math.ceil(e.restingFor / 60)} min` : ""}
                 </span>
               ))}
@@ -308,7 +395,7 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
             onClick={handleScrape}
             disabled={disabled || room <= 0}
           >
-            🔎 Find {effectiveTarget} new UAE emails
+            🔎 Find {effectiveTarget} new {allTypes ? "UAE" : typeSummary} emails
           </button>
         ) : (
           <button type="button" className="btn-stop small" onClick={() => { stopRef.current = true; }}>
@@ -323,8 +410,9 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
             <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
           </div>
           <div className="progress-text">
-            {progress.found} / {progress.target} found · {progress.steps} {source === "sites" ? "batch" : "search"}{progress.steps !== 1 ? "es" : ""}
-            {pausedFor > 0 ? ` · next search in ${pausedFor}s` : ""}
+            <span className="live-value">{progress.found} / {progress.target}</span> found ·{" "}
+            <span className="live-value">{progress.steps}</span> {source === "sites" ? "batch" : "search"}{progress.steps !== 1 ? "es" : ""}
+            {pausedFor > 0 && <> · next search in <span className="live-value">{pausedFor}s</span></>}
           </div>
         </>
       )}

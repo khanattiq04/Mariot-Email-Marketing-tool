@@ -104,9 +104,12 @@ with the other API files (`.htaccess` maps `/api/unsubscribe` to it).
 
 Two things to know:
 
-- The button only *notifies the admin*. It does not remove the address from any
-  provider's list, and the `List-Unsubscribe` header already points at
-  `MAIL_UNSUBSCRIBE_EMAIL` for one-click clients.
+- The button *notifies the admin* and marks the address `unsubscribed` in the
+  email records. It does not remove the address from any provider's list.
+- Every email carries `List-Unsubscribe` (the recipient's https link plus
+  `MAIL_UNSUBSCRIBE_EMAIL`) and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+  so Gmail/Yahoo/Outlook show their own Unsubscribe button. Both unsubscribe
+  endpoints accept that one-click `POST` as well as the normal `GET`.
 - Email link scanners sometimes open links in a message, which can trigger an
   unsubscribe request with no human behind it. The notification says so; check
   the address before removing it.
@@ -141,6 +144,19 @@ The Popular gallery keeps all three images on desktop and shows its first two
 side by side on mobile. Template images scale to the available width while
 preserving their original proportions, so the complete image remains visible.
 
+One template, three renderers: `src/emailTemplate.js` (CommonJS) is used by the
+composer preview and `api/send-email.js`, and `public/api/send-email.php` holds
+a PHP copy generated from it. `src/emailTemplate.test.js` checks that the PHP
+copy renders byte-identical HTML and text (when `php` is installed), so edit
+both together.
+
+- Empty image fields show a dashed placeholder in the preview only; in sent
+  emails the slot is left out, and the Popular gallery lays out only the
+  images you filled.
+- Each email has a hidden preview line (taken from the intro), a plain-text
+  part, Outlook-safe image widths and buttons, and a light colour scheme.
+- `MAIL_COMPANY_ADDRESS` (optional) adds a postal address under the footer.
+
 ### UAE email finder and email records
 
 The **UAE Email Finder & Records** card finds business emails for the UAE
@@ -163,6 +179,19 @@ market, fills the recipient box with them and keeps a record of every address.
 - Progress is remembered (`scrape-state.json`): each run continues with the
   next queries/result pages and does not re-read a site for 30 days, so every
   run finds new addresses.
+
+**Business type** filter: every email is filed under the kind of business
+whose website it came from - Restaurants & cafés, Hotels, Catering, Services,
+Schools & education or Others. The type is read from the website itself (its
+title, description, headings, domain name and text; e.g. "catering",
+"banquets" -> Catering, "curriculum", "admissions" -> Schools). Pick one or
+more types before **Find** or **Load**: only those are added to the
+recipient box. Emails of other types found on the way are still saved, so
+nothing is wasted. In search-engine mode the selected types also choose the
+search words when the "Business types to search" box is empty. Emails saved
+before this filter existed can be sorted with "Sort N older saved emails by
+type" (their websites are visited once). The type is stored in the
+`business_type` column of the records file.
 
 **Send campaign to** decides who is emailed:
 

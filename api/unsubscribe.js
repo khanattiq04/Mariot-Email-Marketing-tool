@@ -148,7 +148,9 @@ module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "GET") {
+  // GET = link clicked in the email; POST = one-click unsubscribe from the
+  // mail app (RFC 8058, sent with List-Unsubscribe=One-Click).
+  if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 

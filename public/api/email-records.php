@@ -85,6 +85,7 @@ try {
       'searchProvider' => rec_search_provider(),
       'engines'        => rec_search_provider() === 'free' ? rec_engine_status() : null,
       'sites'          => rec_sites_status(),
+      'businessTypes'  => array_map(function ($t) { return $t['label']; }, rec_business_types()),
     ));
   }
 
@@ -107,6 +108,11 @@ try {
       $result['sites'] = rec_sites_status();
       respond(200, $result);
 
+    case 'classify':
+      $result = rec_classify_step();
+      $result['stats'] = rec_stats(rec_load());
+      respond(200, $result);
+
     case 'scrape':
       $result = rec_scrape_step($body);
       $result['stats'] = rec_stats(rec_load());
@@ -115,7 +121,8 @@ try {
     case 'load':
       $count = max(0, min(5000, (int) ($body['count'] ?? 0)));
       $exclude = is_array($body['exclude'] ?? null) ? $body['exclude'] : array();
-      respond(200, array('emails' => rec_pick($mode, $count, $exclude), 'stats' => rec_stats(rec_load())));
+      respond(200, array('emails' => rec_pick($mode, $count, $exclude, rec_clean_types($body['types'] ?? null)),
+                         'stats' => rec_stats(rec_load())));
 
     case 'filter':
       $emails = is_array($body['emails'] ?? null) ? $body['emails'] : array();

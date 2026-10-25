@@ -30,7 +30,7 @@ const crypto = require("crypto");
 
 const COLUMNS = [
   "email", "status", "domain", "city", "category", "source_url",
-  "found_at", "last_sent_at", "send_count", "last_error",
+  "found_at", "last_sent_at", "send_count", "last_error", "business_type",
 ];
 const BLOCKED_STATUSES = ["unsubscribed", "invalid"];
 const MAX_PAGES_PER_QUERY = 5;
@@ -86,7 +86,7 @@ const JUNK_LOCALS = new Set([
   "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply", "mailer-daemon",
   "postmaster", "abuse", "hostmaster", "example", "test", "user", "username",
   "name", "email", "youremail", "your.email", "yourname", "your-email", "john.doe",
-  "johndoe", "jane.doe", "firstname.lastname", "firstname", "someone", "xxx",
+  "johndoe", "jane.doe", "firstname.lastname", "firstname", "someone", "xxx", "xyz", "abc", "demo", "sample",
 ]);
 
 const FILE_EXTENSIONS = new Set([
@@ -213,7 +213,7 @@ function blankRecord(email) {
   const lower = email.toLowerCase();
   return {
     email: lower, status: "new", domain: lower.split("@")[1] || "", city: "", category: "",
-    source_url: "", found_at: now(), last_sent_at: "", send_count: "0", last_error: "",
+    source_url: "", found_at: now(), last_sent_at: "", send_count: "0", last_error: "", business_type: "",
   };
 }
 
@@ -237,9 +237,137 @@ function saveState(state) {
 }
 
 function stats(records) {
-  const out = { total: records.size, new: 0, sent: 0, failed: 0, unsubscribed: 0, invalid: 0 };
-  for (const record of records.values()) if (record.status in out) out[record.status]++;
+  const out = { total: records.size, new: 0, sent: 0, failed: 0, unsubscribed: 0, invalid: 0, types: {}, unsorted: 0 };
+  for (const key of Object.keys(BUSINESS_TYPES)) out.types[key] = { total: 0, new: 0 };
+  for (const record of records.values()) {
+    if (record.status in out) out[record.status]++;
+    const type = recordType(record);
+    if (!type) out.unsorted++;
+    else {
+      out.types[type].total++;
+      if (record.status === "new") out.types[type].new++;
+    }
+  }
   return out;
+}
+
+// ------------------------------------------------------- business types --
+//
+// Every email is filed under the kind of business whose website it came from,
+// so a campaign can go to restaurants only, or schools only.
+
+const BUSINESS_TYPES = {
+  restaurant: {
+    label: "Restaurants & cafés",
+    keywords: ["restaurants", "cafes", "coffee shops", "bakeries", "cloud kitchens", "juice bars", "sweets shops",
+      "fast food restaurants", "shawarma restaurants"],
+    rules: [[/\brestaurants?\b/g, 1], [/\bcaf(?:e|é)s?\b/g, 1], [/\bcoffee\b/g, 0.8], [/\bbistro/g, 1],
+      [/\bgrill\b/g, 0.8], [/\beatery\b/g, 1], [/\bcuisine\b/g, 0.8], [/\bmenu\b/g, 0.6], [/\bbaker(?:y|ies)\b/g, 1],
+      [/\bpizza/g, 1], [/\bburgers?\b/g, 1], [/\bshawarma/g, 1], [/\bsweets\b/g, 0.8], [/\bjuices?\b/g, 0.6],
+      [/\bdin(?:e|ing)\b/g, 0.6], [/\bdelivery\b/g, 0.3], [/\bfood\b/g, 0.3]],
+  },
+  hotel: {
+    label: "Hotels",
+    keywords: ["hotels", "hotel apartments", "resorts", "serviced apartments"],
+    rules: [[/\bhotels?\b/g, 1], [/\bresorts?\b/g, 1], [/\bhotel apartments?\b/g, 1.5], [/\bsuites?\b/g, 0.5],
+      [/\bhostels?\b/g, 1], [/\baccommodation/g, 0.8], [/\bbook (?:your|a) (?:room|stay)\b/g, 1], [/\bcheck-?in\b/g, 0.4]],
+  },
+  catering: {
+    label: "Catering",
+    keywords: ["catering companies", "event catering", "food catering services", "corporate catering"],
+    rules: [[/\bcater(?:ing|er|ers)\b/g, 1.6], [/\bbanquets?\b/g, 0.8], [/\bmeal (?:plans?|boxes)\b/g, 0.8],
+      [/\bcanteen/g, 0.8], [/\bfood services?\b/g, 0.8]],
+  },
+  services: {
+    label: "Services",
+    keywords: ["facility management companies", "cleaning companies", "maintenance companies", "logistics companies",
+      "law firms", "accounting firms", "digital marketing agencies", "IT companies", "real estate companies",
+      "contracting companies", "recruitment agencies", "pest control companies", "car rental companies",
+      "travel agencies", "business setup consultants", "event management companies", "insurance companies"],
+    rules: [[/\bconsult(?:ing|ancy|ants?)\b/g, 1], [/\bmaintenance\b/g, 1], [/\bcleaning\b/g, 1],
+      [/\bcontracting\b/g, 1], [/\blogistics\b/g, 1], [/\bfreight\b/g, 1], [/\bshipping\b/g, 0.6],
+      [/\blaw firm|\badvocates\b|\blegal consult/g, 1.2], [/\baccounting\b|\bauditing\b|\bbookkeeping\b/g, 1],
+      [/\bmarketing agency|\bdigital marketing\b|\badvertising\b/g, 1], [/\bit solutions\b|\bsoftware\b|\bweb development\b/g, 1],
+      [/\breal estate\b|\bproperties\b/g, 1], [/\bconstruction\b/g, 0.8], [/\bengineering\b/g, 0.6],
+      [/\binsurance\b/g, 1], [/\brecruitment\b|\bmanpower\b/g, 1], [/\bfacility management\b/g, 1.2],
+      [/\bpest control\b/g, 1.2], [/\blaundry\b/g, 1], [/\bcar rental\b|\brent a car\b/g, 1.2],
+      [/\btravel\b|\btourism\b/g, 0.8], [/\bsecurity services\b/g, 1], [/\bprinting\b/g, 0.8],
+      [/\bbusiness setup\b/g, 1.2], [/\bevent management\b/g, 1], [/\bservices\b/g, 0.25]],
+  },
+  school: {
+    label: "Schools & education",
+    keywords: ["schools", "nurseries", "training institutes", "universities", "academies", "kindergartens"],
+    rules: [[/\bschools?\b/g, 1.2], [/\bacadem(?:y|ies)\b/g, 1], [/\bnurser(?:y|ies)\b/g, 1], [/\bkindergarten/g, 1.2],
+      [/\buniversity\b/g, 1.2], [/\bcollege\b/g, 1], [/\binstitute\b/g, 0.8], [/\btraining (?:centre|center|institute)/g, 1.2],
+      [/\bcurriculum\b/g, 1], [/\badmissions?\b/g, 1], [/\bstudents?\b/g, 0.5], [/\beducation(?:al)?\b/g, 0.8]],
+  },
+  other: {
+    label: "Others",
+    keywords: ["supermarkets", "general trading companies", "hospitals", "clinics", "pharmacies", "furniture stores",
+      "electronics stores", "jewellery shops", "perfume shops", "fashion boutiques", "car dealers", "auto repair garages",
+      "beauty salons", "gyms", "food trading companies", "industrial suppliers", "packaging companies", "food manufacturers"],
+    rules: [],
+  },
+};
+const TYPE_KEYS = Object.keys(BUSINESS_TYPES);
+
+function cleanTypes(value) {
+  const list = Array.isArray(value) ? value.map(String) : [];
+  const wanted = list.filter((t) => TYPE_KEYS.includes(t));
+  return wanted.length && wanted.length < TYPE_KEYS.length ? wanted : null;   // null = every type
+}
+
+/** Which kind of business a web page belongs to. */
+function classifyPage(html, host) {
+  const pick = (re) => { const m = html.match(re); return m ? decodeEntities(m[1].replace(/<[^>]+>/g, " ")) : ""; };
+  const title = pick(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const desc = pick(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)/i) +
+    " " + pick(/<meta[^>]+property=["']og:(?:site_name|title|description)["'][^>]+content=["']([^"']*)/i);
+  const heads = [...html.matchAll(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi)].slice(0, 12)
+    .map((m) => m[1].replace(/<[^>]+>/g, " ")).join(" ");
+  const domain = String(host || "").replace(/^www\./, "").replace(/\.(?:co|com|net|org)?\.?ae$|\.[a-z]+$/, "")
+    .replace(/[-_.]/g, " ");
+  const body = pageText(html).slice(0, 15000);
+  const parts = [[title, 4], [desc, 3], [heads, 2], [domain, 3], [body, 1]].map(([t, w]) => [t.toLowerCase(), w]);
+  let best = "other";
+  let bestScore = 0;
+  const scores = {};
+  for (const [type, def] of Object.entries(BUSINESS_TYPES)) {
+    let score = 0;
+    for (const [re, weight] of def.rules) {
+      for (const [text, w] of parts) {
+        const hits = (text.match(re) || []).length;
+        score += Math.min(hits, w === 1 ? 5 : 2) * w * weight;
+      }
+    }
+    scores[type] = score;
+    if (score > bestScore) { best = type; bestScore = score; }
+  }
+  if (bestScore < 4) return "other";
+  // A caterer's site also talks about food and menus: catering wins when it is prominent.
+  if (best === "restaurant" && scores.catering >= 4 && scores.catering >= 0.5 * scores.restaurant) return "catering";
+  return best;
+}
+
+/** Type of a search keyword ("restaurants" -> restaurant). */
+function typeOfKeyword(keyword) {
+  const k = String(keyword || "").toLowerCase().trim();
+  if (!k) return "";
+  for (const [type, def] of Object.entries(BUSINESS_TYPES)) {
+    if (def.keywords.some((w) => w.toLowerCase() === k)) return type;
+  }
+  for (const [type, def] of Object.entries(BUSINESS_TYPES)) {
+    if (def.rules.some(([re]) => { re.lastIndex = 0; return new RegExp(re.source).test(k); })) return type;
+  }
+  return "other";
+}
+
+/** A record's business type ("" = not sorted yet). */
+function recordType(record) {
+  if (record.business_type && TYPE_KEYS.includes(record.business_type)) return record.business_type;
+  const category = (record.category || "").trim();
+  if (category && category !== "UAE website" && category !== "manual") return typeOfKeyword(category);
+  return "";
 }
 
 function markRecord(email, status, error = "") {
@@ -871,7 +999,10 @@ function cleanList(value, max) {
 async function scrapeStep(body) {
   const started = Date.now();
   const need = Math.max(1, Math.min(2500, parseInt(body.need, 10) || 50));
-  const queries = buildQueries(cleanList(body.keywords, 200), cleanList(body.cities, 20));
+  const types = cleanTypes(body.types);
+  let keywords = cleanList(body.keywords, 200);
+  if (!keywords.length && types) keywords = types.flatMap((t) => BUSINESS_TYPES[t].keywords);
+  const queries = buildQueries(keywords, cleanList(body.cities, 20));
 
   const pick = await locked(() => {
     const state = loadState();
@@ -945,6 +1076,8 @@ async function scrapeStep(body) {
   const pages = await fetchPages([...toFetch.values()]);
   const followUps = [];
   let directoryPages = 0;
+  const pageTypes = new Map();     // host -> business type of its home/result page
+  for (const [url, html] of pages) pageTypes.set(hostOf(url), classifyPage(html, hostOf(url)));
   for (const [url, html] of pages) {
     const before = candidates.size;
     consider(html, pageText(html), url);
@@ -991,6 +1124,7 @@ async function scrapeStep(body) {
   }
   if (rejected) log.push(rejected + " rejected: domain has no working mail server" + (smtp ? " or mailbox does not exist" : ""));
 
+  const typeOf = new Map();
   const added = await locked(() => {
     const records = loadRecords();
     const out = [];
@@ -1000,8 +1134,13 @@ async function scrapeStep(body) {
       record.city = query.city;
       record.category = query.category;
       record.source_url = source;
+      // A directory page lists many kinds of business: trust the search keyword there.
+      const siteType = pageTypes.get(hostOf(source));
+      record.business_type = siteType && siteType !== "other" && !hostMatches(hostOf(source), DIRECTORY_HOSTS)
+        ? siteType : typeOfKeyword(query.category);
       records.set(email, record);
       out.push(email);
+      typeOf.set(email, record.business_type);
     }
     if (out.length) saveRecords(records);
     const state = loadState();
@@ -1011,7 +1150,11 @@ async function scrapeStep(body) {
   });
   log.push(added.length + " verified new UAE emails saved to records");
 
-  return { exhausted: false, query: query.q, page: pick.page, added: added.length, emails: added.slice(0, need), log };
+  const wanted = types ? added.filter((e) => types.includes(typeOf.get(e))) : added;
+  if (types && wanted.length < added.length) {
+    log.push((added.length - wanted.length) + " of them are other kinds of business - kept in records for later");
+  }
+  return { exhausted: false, query: query.q, page: pick.page, added: wanted.length, emails: wanted.slice(0, need), log };
 }
 
 // =========================================================================
@@ -1158,6 +1301,36 @@ async function prepareSites() {
   return { ready: sitesReady(sites), log };
 }
 
+/** .ae websites a page links to (other than itself). */
+function discoverAeSites(html, pageHost) {
+  const own = aeDomain(pageHost);
+  const out = new Set();
+  for (const m of html.matchAll(/https?:\/\/([a-z0-9.-]+\.ae)(?=[/:"'?\s#]|$)/gi)) {
+    const domain = aeDomain(m[1]);
+    if (domain && domain !== own) out.add(domain);
+    if (out.size >= 40) break;
+  }
+  return [...out];
+}
+
+/** Appends never-seen domains to the website list; returns how many were added. */
+function addSites(domains) {
+  if (!domains.length) return Promise.resolve(0);
+  return locked(() => {
+    const sites = loadSites();
+    const state = loadState();
+    let added = 0;
+    for (const domain of domains) {
+      if (domain in sites.domains || state.crawled[domain] || state.crawled["www." + domain]) continue;
+      sites.domains[domain] = 900000000 + added; // after the ranked sites
+      sites.list.push(domain);
+      added++;
+    }
+    if (added) saveSites(sites);
+    return added;
+  });
+}
+
 function detectCity(text) {
   const lower = text.toLowerCase();
   return UAE_CITIES.find((city) => lower.includes(city.toLowerCase())) || "";
@@ -1167,6 +1340,7 @@ function detectCity(text) {
 async function crawlStep(body) {
   const started = Date.now();
   const need = Math.max(1, Math.min(2500, parseInt(body.need, 10) || 50));
+  const types = cleanTypes(body.types);
 
   const batch = await locked(() => {
     const sites = loadSites();
@@ -1178,22 +1352,48 @@ async function crawlStep(body) {
   });
   if (!batch) return { needsPrepare: true, emails: [], added: 0, log: [] };
   if (!batch.domains.length) {
+    // Every listed website was visited: look at visited websites again only
+    // for links to UAE websites not seen yet, which refills the list.
+    const again = await locked(() => {
+      const sites = loadSites();
+      const from = sites.discover_cursor || 0;
+      const domains = sites.list.slice(from, from + SITE_BATCH);
+      sites.discover_cursor = from + domains.length;
+      saveSites(sites);
+      return domains;
+    });
+    if (again.length) {
+      const found = new Set();
+      for (const [url, html] of await fetchPages(again.map((d) => "https://" + d + "/"), 8000)) {
+        for (const domain of discoverAeSites(html, hostOf(url))) found.add(domain);
+      }
+      const grown = await addSites([...found]);
+      return {
+        exhausted: false, emails: [], added: 0,
+        log: ["All listed websites visited - checked " + again.length + " of them for links to more UAE websites: " + grown + " new websites added"],
+      };
+    }
     return {
       exhausted: true, emails: [], added: 0,
       log: ['Every website in the UAE list has been visited. The list refreshes monthly; meanwhile use "Search engines" mode.'],
     };
   }
 
-  const candidates = new Map(); // email -> [source url, city]
+  const candidates = new Map(); // email -> [source url, city, business type]
+  const discovered = new Set(); // new .ae websites linked from the pages visited
+  const siteTypes = new Map();  // site -> business type, from its home page
   const consider = (html, url) => {
     const host = hostOf(url);
+    const site = aeDomain(host) || host;
+    if (!siteTypes.has(site)) siteTypes.set(site, classifyPage(html, host));
+    for (const domain of discoverAeSites(html, host)) discovered.add(domain);
     const text = deobfuscate(pageText(html));
     const city = detectCity(text);
     for (const email of extract(html, text)) {
       if (candidates.has(email) || !isValidSyntax(email) || isJunk(email)) continue;
       const tld = email.split(".").pop();
       const uae = host.endsWith(".ae") ? tld.length !== 2 || GENERIC_CC.has(tld) : isUae(email, text, host);
-      if (uae) candidates.set(email, [url, city]);
+      if (uae) candidates.set(email, [url, city, siteTypes.get(site)]);
     }
   };
 
@@ -1215,8 +1415,24 @@ async function crawlStep(body) {
   }
 
   const log = ["Visited " + batch.domains.length + " UAE websites (" + pages.size + " answered, " + batch.left + " left in the list)"];
+  // Websites the visited pages link to, and .ae email domains, join the list,
+  // so it keeps growing and every run reaches websites never visited before.
+  for (const email of candidates.keys()) {
+    const domain = aeDomain(email.split("@")[1]);
+    if (domain) discovered.add(domain);
+  }
+  const grown = await addSites([...discovered]);
+  if (grown) log.push(grown + " new UAE websites discovered and added to the list");
+
   const added = await verifyAndSave(candidates, "UAE website", batch.domains, started, log);
-  return { exhausted: false, added: added.length, emails: added.slice(0, need), log };
+  const wanted = types ? added.filter((e) => types.includes(candidates.get(e)[2])) : added;
+  if (types) {
+    const counts = {};
+    for (const e of added) counts[candidates.get(e)[2]] = (counts[candidates.get(e)[2]] || 0) + 1;
+    const summary = Object.entries(counts).map(([t, n]) => n + " " + BUSINESS_TYPES[t].label.toLowerCase()).join(", ");
+    if (added.length) log.push("By type: " + summary + " - " + wanted.length + " match your selection, the rest are kept in records");
+  }
+  return { exhausted: false, added: wanted.length, emails: wanted.slice(0, need), log };
 }
 
 /** Drops known addresses, checks mail servers (in parallel), saves the rest as "new". */
@@ -1241,12 +1457,13 @@ async function verifyAndSave(candidates, category, hosts, started, log) {
   const added = await locked(() => {
     const records = loadRecords();
     const out = [];
-    for (const [email, [source, city]] of verified) {
+    for (const [email, [source, city, type]] of verified) {
       if (records.has(email)) continue;
       const record = blankRecord(email);
       record.city = city;
       record.category = category;
       record.source_url = source;
+      record.business_type = type || "";
       records.set(email, record);
       out.push(email);
     }
@@ -1260,13 +1477,50 @@ async function verifyAndSave(candidates, category, hosts, started, log) {
   return added;
 }
 
+/**
+ * Sorts emails saved before business types existed: visits the websites they
+ * came from (40 at a time) and files every email from that site under its type.
+ */
+async function classifyStep() {
+  const records = await locked(() => loadRecords());
+  const bySite = new Map();
+  for (const record of records.values()) {
+    if (recordType(record)) continue;
+    const source = /^https?:/.test(record.source_url) ? record.source_url : "https://" + record.domain + "/";
+    const site = hostOf(source);
+    if (!site) continue;
+    if (!bySite.has(site)) bySite.set(site, []);
+    bySite.get(site).push(record.email);
+  }
+  const sites = [...bySite.keys()].slice(0, SITE_BATCH);
+  if (!sites.length) return { done: true, sorted: 0, left: 0, log: ["Every saved email is sorted by business type."] };
+  const pages = await fetchPages(sites.map((s) => "https://" + s + "/"), 8000);
+  const types = new Map();
+  for (const [url, html] of pages) types.set(hostOf(url), classifyPage(html, hostOf(url)));
+  let sorted = 0;
+  await locked(() => {
+    const fresh = loadRecords();
+    for (const site of sites) {
+      const type = types.get(site) || "other";    // a site that no longer answers is filed under Others
+      for (const email of bySite.get(site)) {
+        const record = fresh.get(email);
+        if (record && !recordType(record)) { record.business_type = type; sorted++; }
+      }
+    }
+    saveRecords(fresh);
+  });
+  const left = [...bySite.keys()].length - sites.length;
+  return { done: left === 0, sorted, left, log: ["Sorted " + sorted + " saved emails from " + sites.length + " websites (" + left + " websites left)"] };
+}
+
 // ------------------------------------------------------------ recipients --
 
-function pick(mode, count, exclude) {
+function pick(mode, count, exclude, types = null) {
   const records = loadRecords();
   const skip = new Set(exclude.map((e) => String(e).trim().toLowerCase()));
   let pool = [...records.values()].filter((r) => {
     if (skip.has(r.email)) return false;
+    if (types && !types.includes(recordType(r))) return false;
     if (mode === "new") return r.status === "new";
     if (mode === "old") return r.status === "sent";
     return r.status === "new" || r.status === "sent";
@@ -1337,6 +1591,7 @@ async function handler(req, res) {
         return res.status(200).send(csv);
       }
       return res.status(200).json({ stats: stats(loadRecords()), searchProvider: searchProvider(),
+        businessTypes: Object.fromEntries(TYPE_KEYS.map((t) => [t, BUSINESS_TYPES[t].label])),
         engines: searchProvider() === "free" ? engineStatus() : null,
         sites: sitesStatus(),
       });
@@ -1356,6 +1611,10 @@ async function handler(req, res) {
         const result = await crawlStep(body);
         return res.status(200).json({ ...result, stats: stats(loadRecords()), sites: sitesStatus() });
       }
+      case "classify": {
+        const result = await classifyStep();
+        return res.status(200).json({ ...result, stats: stats(loadRecords()) });
+      }
       case "scrape": {
         const result = await scrapeStep(body);
         return res.status(200).json({ ...result, stats: stats(loadRecords()) });
@@ -1363,7 +1622,7 @@ async function handler(req, res) {
       case "load": {
         const count = Math.max(0, Math.min(5000, parseInt(body.count, 10) || 0));
         const exclude = Array.isArray(body.exclude) ? body.exclude : [];
-        return res.status(200).json({ emails: pick(mode, count, exclude), stats: stats(loadRecords()) });
+        return res.status(200).json({ emails: pick(mode, count, exclude, cleanTypes(body.types)), stats: stats(loadRecords()) });
       }
       case "filter":
         return res.status(200).json(filter(mode, Array.isArray(body.emails) ? body.emails : []));
@@ -1385,4 +1644,4 @@ module.exports = handler;
 module.exports.markRecord = markRecord;
 // Exposed for tests.
 module.exports._setTransport = (fn) => { transport = fn || httpRequest; };
-module.exports._internals = { aeDomain, unzipFirst, httpRequest, contactLinks, listingLinks, engineWait, resultLinks, unwrapLink, engineBlocked, extract, pageText, isUae, isJunk, isValidSyntax, buildQueries, filter, pick };
+module.exports._internals = { classifyPage, typeOfKeyword, recordType, cleanTypes, aeDomain, unzipFirst, httpRequest, contactLinks, listingLinks, engineWait, resultLinks, unwrapLink, engineBlocked, extract, pageText, isUae, isJunk, isValidSyntax, buildQueries, filter, pick };
