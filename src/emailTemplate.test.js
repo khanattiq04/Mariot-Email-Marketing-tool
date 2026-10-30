@@ -131,6 +131,9 @@ const phpAvailable = (() => {
     script,
     `<?php
 $src = file_get_contents($argv[1]);
+$cStart = strpos($src, "const EMAIL_FONT");
+$cEnd = strpos($src, "\\nSKELETON;\\n", $cStart) + strlen("\\nSKELETON;\\n");
+eval(substr($src, $cStart, $cEnd - $cStart));
 $start = strpos($src, "// ---------------------------------------------------------------- template --");
 $end = strpos($src, "\\nfunction build_html(");
 eval(substr($src, $start, $end - $start));
@@ -147,4 +150,15 @@ echo json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     expect(php[i][0]).toBe(buildEmailHtml(x.c, x.o));
     expect(php[i][1]).toBe(buildEmailText(x.c, x.o));
   });
+});
+
+// PHP defines a top-level `const` only when execution reaches it, so the
+// template constants must sit above the code that handles the request.
+test("PHP sender defines the template constants before sending", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "public", "api", "send-email.php"), "utf8");
+  const firstConst = src.indexOf("const EMAIL_FONT");
+  const firstSend = src.indexOf("send_campaign($body);");
+  expect(firstConst).toBeGreaterThan(-1);
+  expect(firstSend).toBeGreaterThan(-1);
+  expect(firstConst).toBeLessThan(firstSend);
 });

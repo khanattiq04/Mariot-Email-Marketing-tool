@@ -150,6 +150,10 @@ export default function App() {
   const [session, setSession] = useState("checking"); // "checking" | "authed" | "anon"
   const [sessionEmail, setSessionEmail] = useState("");
   const stopRef = useRef(false);
+  // Addresses the tool put in the recipient box itself (finder, records,
+  // auto-fill). Everything else in the box was typed or pasted by hand.
+  const autoEmailsRef = useRef(new Set());
+  const autoFilledRef = useRef(false);
   const [previewDevice, setPreviewDevice] = useState("desktop"); // "desktop" | "mobile"
 
   useEffect(() => {
@@ -233,28 +237,65 @@ export default function App() {
       .filter((e) => e.includes("@"));
 
   // Adds addresses to the recipient box, skipping ones already in it.
-  const appendEmails = (incoming) =>
+  const appendEmails = (incoming) => {
+    incoming.forEach((e) => autoEmailsRef.current.add(e.toLowerCase()));
     setEmails((prev) => {
       const current = prev.split(/[\n,;]+/).map((e) => e.trim()).filter((e) => e.includes("@"));
       const seen = new Set(current.map((e) => e.toLowerCase()));
       const added = incoming.filter((e) => !seen.has(e.toLowerCase()) && seen.add(e.toLowerCase()));
       return [...current, ...added].join("\n");
     });
+  };
+
+  // Fills the recipient box with scraped emails that were never sent to.
+  const fillUnsent = async (keep = []) => {
+    const room = PROVIDER_LIMITS[provider] - keep.length;
+    if (room <= 0) return 0;
+    try {
+      const data = await recordsPost("load", { mode: "new", count: room, exclude: keep });
+      const found = data.emails || [];
+      if (found.length) appendEmails(found);
+      return found.length;
+    } catch (err) {
+      console.warn("[records] could not load unsent emails:", err.message);
+      return 0;
+    }
+  };
+
+  // On opening the tool, show the unsent scraped emails straight away.
+  useEffect(() => {
+    if (session !== "authed" || autoFilledRef.current) return;
+    autoFilledRef.current = true;
+    fillUnsent(parseEmails()).then((n) => {
+      if (n) toast.success(`Loaded ${n} scraped email(s) that have not been sent yet.`, { icon: "📬" });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   const handleSend = async () => {
     let list = parseEmails();
     if (!list.length)               return toast.error("Add at least one valid email.");
     if (!subject || !message) return toast.error("Fill in all fields.");
 
-    // Skip unsubscribed addresses always, and already-emailed ones in "new" mode.
+    // Addresses the tool filled in follow the "new / old / random" rule, so a
+    // scraped address is not emailed twice in "new" mode. Addresses typed or
+    // pasted by hand are always sent, even if emailed before. Unsubscribed
+    // addresses are skipped either way.
     try {
-      const checked = await recordsPost("filter", { mode: recipientMode, emails: list });
-      const skipped = checked.skipped || [];
+      const auto = list.filter((e) => autoEmailsRef.current.has(e.toLowerCase()));
+      const manual = list.filter((e) => !autoEmailsRef.current.has(e.toLowerCase()));
+      const [autoChecked, manualChecked] = await Promise.all([
+        auto.length ? recordsPost("filter", { mode: recipientMode, emails: auto }) : { allowed: [], skipped: [] },
+        // Any mode other than "new" only drops unsubscribed/invalid addresses.
+        manual.length ? recordsPost("filter", { mode: "random", emails: manual }) : { allowed: [], skipped: [] },
+      ]);
+      const allowed = new Set([...(autoChecked.allowed || auto), ...(manualChecked.allowed || manual)].map((e) => e.toLowerCase()));
+      const skipped = [...(autoChecked.skipped || []), ...(manualChecked.skipped || [])];
       if (skipped.length) {
         toast(`Skipping ${skipped.length} address(es): already emailed or unsubscribed.`, { icon: "⏭️" });
         console.info("[records] skipped", skipped);
       }
-      list = checked.allowed || list;
+      list = list.filter((e) => allowed.has(e.toLowerCase()));
       if (!list.length) return toast.error("Every address in the list was already emailed or unsubscribed.");
     } catch (err) {
       toast(`Could not check the email records (${err.message}). Sending to the list as it is.`, { icon: "⚠️" });
@@ -272,6 +313,7 @@ export default function App() {
     setProviderStats({ brevo: 0, resend: 0, mailersend: 0, emailoctopus: 0 });
     toast.success(`Starting campaign for ${list.length} email(s) via ${provider.toUpperCase()}...`);
 
+    const sentNow = [];
     for (let i = 0; i < list.length; i++) {
       if (stopRef.current) {
         addLog("⛔ Campaign stopped by user.", "warn");
@@ -333,6 +375,7 @@ export default function App() {
           addLog("✅ Sent to " + email + "  [" + icon + " " + usedProvider + "]" + reference + note, "success");
         }
         markRecord(email, "sent");
+        sentNow.push(email);
         setProgress({ done: i + 1, total: list.length });
 
       } catch (err) {
@@ -351,6 +394,15 @@ export default function App() {
     if (!stopRef.current) {
       toast.success("Campaign complete!");
       addLog("🎉 Campaign finished.", "success");
+
+      // Take the sent addresses out of the box and top it up with the next
+      // scraped emails that have not been sent yet.
+      const done = new Set(sentNow.map((e) => e.toLowerCase()));
+      const remaining = parseEmails().filter((e) => !done.has(e.toLowerCase()));
+      done.forEach((e) => autoEmailsRef.current.delete(e));
+      setEmails(remaining.join("\n"));
+      const added = await fillUnsent(remaining);
+      if (added) addLog(`📬 Loaded the next ${added} unsent scraped email(s) into the recipient box.`, "info");
     }
   };
 

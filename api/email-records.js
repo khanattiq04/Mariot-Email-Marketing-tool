@@ -666,15 +666,19 @@ function searchProvider() {
 
 // ------------------------------------------------- free search (no API key) --
 
-const FREE_ENGINES = ["bing", "yahoo", "duckduckgo"];
+// Yahoo and AOL (Yahoo-powered, separate limits), Mojeek and Brave read best
+// without a browser; Bing and DuckDuckGo often answer bots with a challenge.
+const FREE_ENGINES = ["yahoo", "aol", "mojeek", "brave", "bing", "duckduckgo"];
 
 // Anti-block pacing. Engines block traffic that is fast, regular and heavy, so
-// each engine gets a random 25-50 s gap between searches, a daily cap, and a
-// growing rest after any captcha/429 (30 min, 1 h, 2 h ... up to 24 h).
-const ENGINE_GAP_MIN_S = 25;
-const ENGINE_GAP_MAX_S = 50;
-const ENGINE_DAILY_DEFAULT = 120;              // SCRAPER_DAILY_SEARCHES overrides
-const ENGINE_COOLDOWN_MS = 30 * 60 * 1000;     // first rest; doubles per strike
+// each engine gets a random 12-30 s gap between searches, a daily cap, and a
+// growing rest after any captcha/429 (15 min, 30 min, 1 h ... up to 24 h).
+// With six engines in rotation one is usually free, and the browser visits
+// UAE websites while it waits, so a run never sits idle.
+const ENGINE_GAP_MIN_S = 12;
+const ENGINE_GAP_MAX_S = 30;
+const ENGINE_DAILY_DEFAULT = 300;              // SCRAPER_DAILY_SEARCHES overrides
+const ENGINE_COOLDOWN_MS = 15 * 60 * 1000;     // first rest; doubles per strike
 const ENGINE_COOLDOWN_MAX_MS = 24 * 60 * 60 * 1000;
 const MAX_WAIT_S = 120;                        // longer than this => report "resting"
 
@@ -686,7 +690,8 @@ const DIRECTORY_HOSTS = [
 // Search engines' own hosts: never treated as results, never crawled.
 const ENGINE_HOSTS = [
   "bing.com", "bing.net", "bingj.com", "microsoft.com", "msn.com", "live.com",
-  "yahoo.com", "yahoo.net", "yimg.com", "aol.com", "duckduckgo.com",
+  "yahoo.com", "yahoo.net", "yimg.com", "aol.com", "aolcdn.com", "yahooinc.com", "duckduckgo.com",
+  "mojeek.com", "mojeek.co.uk", "brave.com", "bravesoftware.com",
   "google.com", "google.ae", "googleusercontent.com", "gstatic.com",
   "w3.org", "schema.org",
 ];
@@ -699,6 +704,15 @@ function engineUrl(engine, query, page) {
   }
   if (engine === "yahoo") {
     return "https://search.yahoo.com/search?" + new URLSearchParams({ p: query, b: String((page - 1) * 10 + 1) });
+  }
+  if (engine === "aol") {
+    return "https://search.aol.com/aol/search?" + new URLSearchParams({ q: query, b: String((page - 1) * 10 + 1) });
+  }
+  if (engine === "mojeek") {
+    return "https://www.mojeek.com/search?" + new URLSearchParams({ q: query, s: String((page - 1) * 10 + 1) });
+  }
+  if (engine === "brave") {
+    return "https://search.brave.com/search?" + new URLSearchParams({ q: query, offset: String(page - 1), source: "web" });
   }
   return "https://html.duckduckgo.com/html/?" + new URLSearchParams({ q: query, kl: "ae-en", s: String((page - 1) * 30) });
 }
@@ -738,15 +752,18 @@ function resultLinks(html) {
     const host = hostOf(url);
     if (!host || links.has(host) || hostMatches(host, ENGINE_HOSTS)) continue;
     links.set(host, url);
-    if (links.size >= 12) break;
+    if (links.size >= 20) break;
   }
   return [...links.values()];
 }
 
 function engineBlocked(status, html, linkCount) {
   if ([202, 403, 429, 503].includes(status)) return true;
-  // Only a page without results counts: normal pages can mention "captcha" in scripts.
-  return linkCount === 0 && /captcha|unusual traffic|anomaly-modal|are you a robot|challenge-form|detected unusual/i.test(html);
+  // A results page with no results is a bot check (Bing's "Challenge" page,
+  // a captcha, a JavaScript-only page): rest that engine instead of asking
+  // it again every few seconds. Normal pages can mention "captcha" in
+  // scripts, so a page that has results never counts.
+  return linkCount === 0;
 }
 
 const today = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 10);
@@ -837,7 +854,14 @@ async function freeSearch(query, page) {
     let status = 0;
     let html = "";
     try {
-      const response = await transport(url, { headers: BROWSER_HEADERS, timeoutMs: 15000 });
+      let response;
+      try {
+        response = await transport(url, { headers: BROWSER_HEADERS, timeoutMs: 15000 });
+      } catch {
+        // A dropped connection ("unexpected eof", "socket hang up") is
+        // usually a one-off: try once more.
+        response = await transport(url, { headers: BROWSER_HEADERS, timeoutMs: 15000 });
+      }
       status = response.status;
       html = response.body;
     } catch (err) {
@@ -850,7 +874,7 @@ async function freeSearch(query, page) {
     if (engineBlocked(status, html, links.length)) {
       saveDebugPage(engine, status, html);
       await engineRecord(engine, "blocked");
-      tried.push(engine + " (asked for a captcha - resting it)");
+      tried.push(engine + (links.length ? " (asked for a captcha - resting it)" : " (bot check, no results - resting it)"));
       continue;
     }
     await engineRecord(engine, links.length ? "ok" : "empty");
@@ -1644,4 +1668,4 @@ module.exports = handler;
 module.exports.markRecord = markRecord;
 // Exposed for tests.
 module.exports._setTransport = (fn) => { transport = fn || httpRequest; };
-module.exports._internals = { classifyPage, typeOfKeyword, recordType, cleanTypes, aeDomain, unzipFirst, httpRequest, contactLinks, listingLinks, engineWait, resultLinks, unwrapLink, engineBlocked, extract, pageText, isUae, isJunk, isValidSyntax, buildQueries, filter, pick };
+module.exports._internals = { freeSearch, engineUrl, classifyPage, typeOfKeyword, recordType, cleanTypes, aeDomain, unzipFirst, httpRequest, contactLinks, listingLinks, engineWait, resultLinks, unwrapLink, engineBlocked, extract, pageText, isUae, isJunk, isValidSyntax, buildQueries, filter, pick };

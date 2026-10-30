@@ -11,7 +11,7 @@ const MODES = [
 const MAX_STEPS = 300;          // safety stop for one scrape run
 const MAX_EMPTY_STEPS = 25;     // stop when searches keep finding nothing new
 const MAX_ERRORS_IN_ROW = 3;
-const ENGINE_LABELS = { bing: "Bing", yahoo: "Yahoo", duckduckgo: "DuckDuckGo" };
+const ENGINE_LABELS = { yahoo: "Yahoo", aol: "AOL", mojeek: "Mojeek", brave: "Brave", bing: "Bing", duckduckgo: "DuckDuckGo" };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -90,6 +90,54 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
     const action = source === "sites" ? "crawl" : "scrape";
     // With a business-type filter many batches hold none of the chosen types: allow more of them.
     const emptyLimit = source === "sites" ? (types.length === TYPE_ORDER.length ? 60 : 150) : MAX_EMPTY_STEPS;
+    let crawlDone = false; // search mode: the UAE website list has been fully visited
+
+    // Adds new addresses to the recipient box; returns how many were new.
+    const take = (emails) => {
+      const fresh = (emails || []).filter((e) => !seen.has(e.toLowerCase()));
+      fresh.forEach((e) => seen.add(e.toLowerCase()));
+      if (fresh.length) {
+        onAppend(fresh);
+        found += fresh.length;
+        addLog(`➕ Added ${fresh.length} to recipients: ${fresh.join(", ")}`, "success");
+      }
+      return fresh.length;
+    };
+
+    // Downloads the UAE website list (one time, then monthly).
+    const prepareSites = async () => {
+      addLog("📥 Preparing the UAE website list (one-time download, about a minute)...");
+      let ready = false;
+      while (!ready && !stopRef.current) {
+        const prep = await recordsPost("prepare-sites");
+        (prep.log || []).forEach((line) => addLog(line));
+        if (prep.sites) setSites(prep.sites);
+        ready = prep.ready;
+      }
+    };
+
+    // Search mode: instead of sitting idle while the engines are paced,
+    // visit UAE business websites until the next search is due.
+    const crawlUntil = async (until) => {
+      while (!crawlDone && !stopRef.current && found < effectiveTarget && Date.now() < until - 3000) {
+        try {
+          const c = await recordsPost("crawl", { need: effectiveTarget - found, types });
+          if (c.sites) setSites(c.sites);
+          if (c.needsPrepare) {
+            await prepareSites();
+            continue;
+          }
+          (c.log || []).forEach((line) => addLog("🌐 " + line));
+          if (c.stats) setStats(c.stats);
+          take(c.emails);
+          setProgress({ found, target: effectiveTarget, steps });
+          if (c.exhausted) crawlDone = true;
+        } catch (err) {
+          addLog("🌐 Website visit failed: " + err.message, "warn");
+          return;
+        }
+      }
+    };
 
     while (found < effectiveTarget && steps < MAX_STEPS && !stopRef.current) {
       try {
@@ -99,22 +147,19 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
 
         // Website-list mode: download the UAE website list first (one time, then monthly).
         if (data.needsPrepare) {
-          addLog("📥 Preparing the UAE website list (one-time download, about a minute)...");
-          let ready = false;
-          while (!ready && !stopRef.current) {
-            const prep = await recordsPost("prepare-sites");
-            (prep.log || []).forEach((line) => addLog(line));
-            if (prep.sites) setSites(prep.sites);
-            ready = prep.ready;
-          }
+          await prepareSites();
           continue;
         }
 
         // Anti-block pacing: the server says how long until an engine may search again.
         if (data.wait) {
           (data.log || []).forEach((line) => addLog("⚠️ " + line, "warn"));
-          addLog(`⏸ Pausing ${data.wait}s between searches so the search engines do not block us...`);
-          for (let left = data.wait; left > 0 && !stopRef.current; left--) {
+          const until = Date.now() + data.wait * 1000;
+          if (!crawlDone) {
+            addLog(`⚡ Next search in ${data.wait}s - visiting UAE websites meanwhile...`);
+            await crawlUntil(until);
+          }
+          for (let left = Math.ceil((until - Date.now()) / 1000); left > 0 && !stopRef.current && found < effectiveTarget; left--) {
             setPausedFor(left);
             await sleep(1000);
           }
@@ -126,16 +171,8 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
         (data.log || []).forEach((line) => addLog(line));
         if (data.stats) setStats(data.stats);
 
-        const fresh = (data.emails || []).filter((e) => !seen.has(e.toLowerCase()));
-        fresh.forEach((e) => seen.add(e.toLowerCase()));
-        if (fresh.length) {
-          onAppend(fresh);
-          found += fresh.length;
-          emptySteps = 0;
-          addLog(`➕ Added ${fresh.length} to recipients: ${fresh.join(", ")}`, "success");
-        } else {
-          emptySteps++;
-        }
+        if (take(data.emails)) emptySteps = 0;
+        else emptySteps++;
         setProgress({ found, target: effectiveTarget, steps });
 
         if (data.exhausted) {
@@ -148,6 +185,14 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
           break;
         }
       } catch (err) {
+        // Every engine resting: keep finding emails on UAE websites and try
+        // the engines again in two minutes, instead of stopping the run.
+        if (source === "search" && !crawlDone && /all search engines are resting/i.test(err.message)) {
+          addLog("⏸ " + err.message.replace(/ Progress is saved.*$/, ""), "warn");
+          addLog("⚡ Visiting UAE websites meanwhile; searching again in 2 min.");
+          await crawlUntil(Date.now() + 120000);
+          continue;
+        }
         errors++;
         steps++;
         addLog("❌ " + err.message, "error");
@@ -309,7 +354,7 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
       <div className="provider-grid">
         {[
           { value: "sites", title: "⚡ UAE website list", desc: "Fast - visits UAE (.ae) business websites directly. No waiting, no blocks." },
-          { value: "search", title: "🔎 Search engines", desc: "Slower - searches by business type, with pauses between searches." },
+          { value: "search", title: "🔎 Search engines", desc: "Searches by business type, and visits UAE websites while the engines pause." },
         ].map((option) => (
           <label key={option.value} className={`provider-card ${source === option.value ? "active" : ""}`}>
             <input
@@ -371,9 +416,9 @@ export default function EmailScraper({ limit, currentEmails, onAppend, mode, onM
 
       {source === "search" && searchProvider === "free" && (
         <p className="field-hint">
-          Searches Bing, Yahoo and DuckDuckGo directly - no API key needed. To avoid blocks it waits 25-50 s
-          between searches on each engine, stops at a daily limit, and rests any engine that asks for a captcha
-          (30 min, then longer). Directory sites are mined for many companies per search.
+          Searches Yahoo, AOL, Mojeek, Brave, Bing and DuckDuckGo directly - no API key needed. Each engine
+          waits 12-30 s between its own searches and any engine that shows a captcha rests (15 min, then
+          longer). While the engines wait, the tool visits UAE business websites, so no time is lost.
           {engines && (
             <span className="engine-status">
               {Object.entries(engines).map(([name, e]) => (

@@ -609,15 +609,19 @@ function rec_search_provider(): string {
 
 // ------------------------------------------------- free search (no API key) --
 
-const REC_FREE_ENGINES = array('bing', 'yahoo', 'duckduckgo');
+// Yahoo and AOL (Yahoo-powered, separate limits), Mojeek and Brave read best
+// without a browser; Bing and DuckDuckGo often answer bots with a challenge.
+const REC_FREE_ENGINES = array('yahoo', 'aol', 'mojeek', 'brave', 'bing', 'duckduckgo');
 
 // Anti-block pacing. Engines block traffic that is fast, regular and heavy, so
-// each engine gets a random 25-50 s gap between searches, a daily cap, and a
-// growing rest after any captcha/429 (30 min, 1 h, 2 h ... up to 24 h).
-const REC_ENGINE_GAP_MIN = 25;
-const REC_ENGINE_GAP_MAX = 50;
-const REC_ENGINE_DAILY_DEFAULT = 120;     // SCRAPER_DAILY_SEARCHES overrides
-const REC_ENGINE_COOLDOWN_SECONDS = 1800; // first rest; doubles per strike
+// each engine gets a random 12-30 s gap between searches, a daily cap, and a
+// growing rest after any captcha/429 (15 min, 30 min, 1 h ... up to 24 h).
+// With six engines in rotation one is usually free, and the browser visits
+// UAE websites while it waits, so a run never sits idle.
+const REC_ENGINE_GAP_MIN = 12;
+const REC_ENGINE_GAP_MAX = 30;
+const REC_ENGINE_DAILY_DEFAULT = 300;     // SCRAPER_DAILY_SEARCHES overrides
+const REC_ENGINE_COOLDOWN_SECONDS = 900;  // first rest; doubles per strike
 const REC_ENGINE_COOLDOWN_MAX = 86400;
 const REC_MAX_WAIT_SECONDS = 120;         // longer than this => report "busy"
 
@@ -631,7 +635,8 @@ const REC_DIRECTORY_HOSTS = array(
 // Search engines' own hosts: never treated as results, never crawled.
 const REC_ENGINE_HOSTS = array(
   'bing.com', 'bing.net', 'bingj.com', 'microsoft.com', 'msn.com', 'live.com',
-  'yahoo.com', 'yahoo.net', 'yimg.com', 'aol.com', 'duckduckgo.com',
+  'yahoo.com', 'yahoo.net', 'yimg.com', 'aol.com', 'aolcdn.com', 'yahooinc.com', 'duckduckgo.com',
+  'mojeek.com', 'mojeek.co.uk', 'brave.com', 'bravesoftware.com',
   'google.com', 'google.ae', 'googleusercontent.com', 'gstatic.com',
   'w3.org', 'schema.org',
 );
@@ -644,6 +649,15 @@ function rec_engine_url(string $engine, string $query, int $page): string {
   }
   if ($engine === 'yahoo') {
     return 'https://search.yahoo.com/search?' . http_build_query(array('p' => $query, 'b' => ($page - 1) * 10 + 1));
+  }
+  if ($engine === 'aol') {
+    return 'https://search.aol.com/aol/search?' . http_build_query(array('q' => $query, 'b' => ($page - 1) * 10 + 1));
+  }
+  if ($engine === 'mojeek') {
+    return 'https://www.mojeek.com/search?' . http_build_query(array('q' => $query, 's' => ($page - 1) * 10 + 1));
+  }
+  if ($engine === 'brave') {
+    return 'https://search.brave.com/search?' . http_build_query(array('q' => $query, 'offset' => $page - 1, 'source' => 'web'));
   }
   return 'https://html.duckduckgo.com/html/?' . http_build_query(array(
     'q' => $query, 'kl' => 'ae-en', 's' => ($page - 1) * 30,
@@ -684,15 +698,18 @@ function rec_result_links(string $html): array {
     $host = rec_host($url);
     if ($host === '' || isset($links[$host]) || rec_host_matches($host, REC_ENGINE_HOSTS)) continue;
     $links[$host] = $url;
-    if (count($links) >= 12) break;
+    if (count($links) >= 20) break;
   }
   return array_values($links);
 }
 
 function rec_engine_blocked(int $status, string $html, int $linkCount): bool {
   if (in_array($status, array(202, 403, 429, 503), true)) return true;
-  // Only a page without results counts: normal pages can mention "captcha" in scripts.
-  return $linkCount === 0 && (bool) preg_match('/captcha|unusual traffic|anomaly-modal|are you a robot|challenge-form|detected unusual/i', $html);
+  // A results page with no results is a bot check (Bing's "Challenge" page,
+  // a captcha, a JavaScript-only page): rest that engine instead of asking
+  // it again every few seconds. Normal pages can mention "captcha" in
+  // scripts, so a page that has results never counts.
+  return $linkCount === 0;
 }
 
 /** Keeps the last odd engine reply, so a failing engine can be diagnosed. */
@@ -794,13 +811,20 @@ function rec_free_search(string $query, int $page): array {
   $tried = array();
   foreach ($ready as $engine) {
     $url = rec_engine_url($engine, $query, $page);
+    $headers = array(
+      'User-Agent: ' . REC_BROWSER_UA,
+      'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language: en-US,en;q=0.9',
+      'Upgrade-Insecure-Requests: 1',
+    );
     try {
-      $response = rec_http('GET', $url, array(
-        'User-Agent: ' . REC_BROWSER_UA,
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language: en-US,en;q=0.9',
-        'Upgrade-Insecure-Requests: 1',
-      ), null);
+      try {
+        $response = rec_http('GET', $url, $headers, null);
+      } catch (Throwable $first) {
+        // A dropped connection ("SSL_read: unexpected eof") is usually a
+        // one-off: try once more on a fresh HTTP/1.1 connection.
+        $response = rec_http('GET', $url, $headers, null, 15, true);
+      }
     } catch (Throwable $err) {
       rec_engine_record($engine, 'error');
       $tried[] = $engine . ' (' . $err->getMessage() . ')';
@@ -811,7 +835,7 @@ function rec_free_search(string $query, int $page): array {
     if (rec_engine_blocked($response['status'], $response['body'], count($links))) {
       rec_save_debug_page($engine, $response['status'], $response['body']);
       rec_engine_record($engine, 'blocked');
-      $tried[] = $engine . ' (asked for a captcha - resting it)';
+      $tried[] = $engine . ($links ? ' (asked for a captcha - resting it)' : ' (bot check, no results - resting it)');
       continue;
     }
     rec_engine_record($engine, $links ? 'ok' : 'empty');
@@ -943,8 +967,13 @@ function rec_search(string $query, int $page): array {
   return array('engine' => $serper !== '' ? 'serper' : 'serpapi', 'results' => $results);
 }
 
-function rec_http(string $method, string $url, array $headers, ?string $body, int $timeout = 15): array {
+function rec_http(string $method, string $url, array $headers, ?string $body, int $timeout = 15, bool $fresh = false): array {
   $handle = curl_init($url);
+  if ($fresh) {
+    curl_setopt($handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    curl_setopt($handle, CURLOPT_FRESH_CONNECT, true);
+    curl_setopt($handle, CURLOPT_FORBID_REUSE, true);
+  }
   curl_setopt_array($handle, array(
     CURLOPT_CUSTOMREQUEST  => $method,
     CURLOPT_RETURNTRANSFER => true,
