@@ -110,9 +110,6 @@ Two things to know:
   `MAIL_UNSUBSCRIBE_EMAIL`) and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
   so Gmail/Yahoo/Outlook show their own Unsubscribe button. Both unsubscribe
   endpoints accept that one-click `POST` as well as the normal `GET`.
-- Email link scanners sometimes open links in a message, which can trigger an
-  unsubscribe request with no human behind it. The notification says so; check
-  the address before removing it.
 
 
 
